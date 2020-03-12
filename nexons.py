@@ -83,7 +83,7 @@ def get_chexons_segment_string (sequence, genomic_file, position_offset):
     # We need to write the read into a file
     read_file = tempfile.mkstemp(suffix=".fa", dir=".")
 
-    with open(read_file[1],"w") as out:
+    with os.fdopen(read_file[0],"w") as out:
         out.write(f">read\n{sequence}\n")
 
     # Now we run chexons to get the data
@@ -125,10 +125,10 @@ def get_chexons_segment_string (sequence, genomic_file, position_offset):
 
     # Clean up the chexons output
     os.unlink(read_file[1]+".dat")
-    os.unlink(read_file[1])
+    os.remove(read_file[1])
 
 
-    return ":".join(pieces_of_text)
+    # return ":".join(pieces_of_text)
 
 
 
