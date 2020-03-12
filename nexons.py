@@ -25,6 +25,52 @@ def main():
     for bam_file in options.bam:
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
 
+    write_output(quantitation, genes, options.outfile)
+
+
+
+def write_output(data, gene_annotations, file):
+    # The structure for the data is 
+    # data[bam_file_name][gene_id][splicing_structure] = count
+    # 
+    # We will have all genes in all BAM files, but might
+    # not have all splice forms in all BAM files
+
+    bam_files = data.keys()
+
+    with open(file,"w") as outfile:
+        # Write the header
+        outfile.write("\t",join(["Gene ID", "Gene Name","Chr","Strand"].extend(bam_files)))
+        outfile.write("\n")
+
+        genes = data[bam_files[0]].keys()
+
+        for gene in genes:
+            splices = set()
+
+            for bam in bam_files:
+                these_splices = data[bam][gene].keys()
+
+                for splice in these_splices:
+                    splices.add(splice)
+
+            # Now we can go through the splices for all BAM files
+            for splice in splices:
+                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"]]
+
+                for bam in bam_files:
+                    if splice in data[bam][gene]:
+                        line_values.append(data[bam][gene][splice])
+                    
+                    else:
+                        line_values.append(0)
+
+                outfile.write("\t".join([str(x) for x in line_values]))
+                outfile.write("\n")
+
+
+
+
 
 def process_bam_file(genes, chromosomes, bam_file):
     counts = {}
@@ -300,6 +346,13 @@ def get_options():
         help="One or more BAM files to quantitate",
         nargs="+"
     )
+
+    parser.add_argument(
+        "--oufile","-o",
+        help="The file to write the output count table to",
+        default="nexons_output.txt"
+    )
+
 
     parser.add_argument(
         "--gene","-g",
