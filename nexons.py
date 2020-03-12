@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 import argparse
 import warnings
+import tempfile
+import subprocess
+import os
 
 verbose = False
 
@@ -26,7 +29,45 @@ def main():
 def process_bam_file(genes, chromosomes, bam_file):
     counts = {}
 
+    for gene_id in genes.keys():
+        gene = genes[gene_id]
+
+        reads = get_reads(gene,bam_file)
+
+
+
+def get_reads(gene, bam_file):
+    # We get all reads which sit within the area of the 
+    # bam file.  Since it's a BAM file we need to use 
+    # samtools to extract the reads.
+    # 
+    # We might want to look at doing all of these extractions
+    # in a single pass later on.  Doing it one at a time 
+    # might be quite inefficient.
+
+    # The filtered region needs to be in a bed file
     
+    bed_file = tempfile.mkstemp(suffix=".bed", dir=".")
+
+    with open(bed_file[1],"w") as out:
+        ## TODO: work out how to handle chr names (chr prefix)
+        out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+
+    print(f"Temp file is {bed_file[1]}")
+
+    # Now we can run samtools to get the data
+    samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1]], stdout=subprocess.PIPE)
+    
+    for line in iter(lambda: samtools_process.stdout.readline(),""):
+        sections = line.decode("utf8").split("\t")
+        if (len(sections)<9):
+            break
+            
+        print(f"{sections[0]}\t{sections[9][1:10]}")
+    
+    # Clean up the bed file
+    os.unlink(bed_file[1])
+
 
 
 
