@@ -29,11 +29,38 @@ def main():
 def process_bam_file(genes, chromosomes, bam_file):
     counts = {}
 
+    # The genes have already been filtered if they're
+    # going to be so we can iterate through everything
     for gene_id in genes.keys():
+
+        # For each gene we're going to re-align around
+        # the gene region so we'll extract the relevant
+        # part of the genome.  We'll start by just using
+        # the gene region, but we might want to add some
+        # context sequence
         gene = genes[gene_id]
 
+        # Check that we have the sequence for this gene
+        if not gene["chrom"] in chromosomes:
+            warnings.warn(f"Skipping {gene['name']} as we don't have sequence for chromosome {gene['chrom']}")
+            continue
+
+        fasta_file = tempfile.mkstemp(suffix=".fa", dir=".")
+        sequence = chromosomes[gene["chrom"]][(gene["start"]-1):gene["end"]]
+
+        with open(fasta_file[1],"w") as out:
+            out.write(f">{gene['name']}\n{sequence}\n")
+
+ 
+        gene_counts = {}
         reads = get_reads(gene,bam_file)
 
+        for read_id in reads.keys():
+            segment_string = get_chexons_segments(reads[read_id],fasta_file[1],gene["start"])
+
+
+def get_chexons_segment_string (sequence, genomic_file, position_offset):
+    pass
 
 
 def get_reads(gene, bam_file):
@@ -44,6 +71,8 @@ def get_reads(gene, bam_file):
     # We might want to look at doing all of these extractions
     # in a single pass later on.  Doing it one at a time 
     # might be quite inefficient.
+
+    reads = {}
 
     # The filtered region needs to be in a bed file
     
@@ -62,13 +91,17 @@ def get_reads(gene, bam_file):
         sections = line.decode("utf8").split("\t")
         if (len(sections)<9):
             break
-            
-        print(f"{sections[0]}\t{sections[9][1:10]}")
+        
+        if sections[0] in reads:
+            warnings.warn("Duplicate read name detected "+sections[0])
+            continue
+
+        reads[sections[0]] = sections[9]
     
     # Clean up the bed file
     os.unlink(bed_file[1])
 
-
+    return reads
 
 
 def read_fasta(fasta_file):
