@@ -10,13 +10,24 @@ def main():
     global verbose
     verbose = options.verbose
 
-    genes = read_gtf(options.gtf)
+    genes = read_gtf(options.gtf, options.gene)
     if verbose:
         print(f"Found {len(genes.keys())} genes")
 
     chromosomes = read_fasta(options.fasta)
     if verbose:
         print(f"Found {len(chromosomes.keys())} chromosomes")
+
+    quantitations = {}
+    for bam_file in options.bam:
+        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
+
+
+def process_bam_file(genes, chromosomes, bam_file):
+    counts = {}
+
+    
+
 
 
 def read_fasta(fasta_file):
@@ -60,7 +71,7 @@ def read_fasta(fasta_file):
 
 
 
-def read_gtf(gtf_file):
+def read_gtf(gtf_file, gene_filter):
 
     if verbose:
         print(f"Reading genes from {gtf_file}")
@@ -112,6 +123,9 @@ def read_gtf(gtf_file):
                 warnings.warn(f"Using gene ID {gene_id} as name")
                 gene_name = gene_id
 
+            if gene_filter is not None:
+                if not (gene_name == gene_filter or gene_id == gene_filter) :
+                    continue
 
             genes[gene_id] = {
                 "name":gene_name,
