@@ -25,7 +25,7 @@ def main():
     for bam_file in options.bam:
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
 
-    write_output(quantitation, genes, options.outfile)
+    write_output(quantitations, genes, options.outfile)
 
 
 
@@ -36,11 +36,13 @@ def write_output(data, gene_annotations, file):
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
 
-    bam_files = data.keys()
+    bam_files = list(data.keys())
 
     with open(file,"w") as outfile:
         # Write the header
-        outfile.write("\t",join(["Gene ID", "Gene Name","Chr","Strand"].extend(bam_files)))
+        header = ["Gene ID", "Gene Name","Chr","Strand","SplicePattern"]
+        header.extend(bam_files)
+        outfile.write("\t".join(header))
         outfile.write("\n")
 
         genes = data[bam_files[0]].keys()
@@ -56,7 +58,7 @@ def write_output(data, gene_annotations, file):
 
             # Now we can go through the splices for all BAM files
             for splice in splices:
-                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"]]
+                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
 
                 for bam in bam_files:
                     if splice in data[bam][gene]:
@@ -174,7 +176,7 @@ def get_chexons_segment_string (sequence, genomic_file, position_offset):
     os.remove(read_file[1])
 
 
-    # return ":".join(pieces_of_text)
+    return ":".join(pieces_of_text)
 
 
 
@@ -348,7 +350,7 @@ def get_options():
     )
 
     parser.add_argument(
-        "--oufile","-o",
+        "--outfile","-o",
         help="The file to write the output count table to",
         default="nexons_output.txt"
     )
