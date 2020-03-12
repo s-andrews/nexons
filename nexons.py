@@ -29,6 +29,9 @@ def main():
 def process_bam_file(genes, chromosomes, bam_file):
     counts = {}
 
+    # Let's keep track of how many reads we've processed
+    progress_counter = 0
+
     # The genes have already been filtered if they're
     # going to be so we can iterate through everything
     for gene_id in genes.keys():
@@ -56,11 +59,77 @@ def process_bam_file(genes, chromosomes, bam_file):
         reads = get_reads(gene,bam_file)
 
         for read_id in reads.keys():
-            segment_string = get_chexons_segments(reads[read_id],fasta_file[1],gene["start"])
 
+            # See if we need to print out a progress message
+            progress_counter += 1
+            if verbose and progress_counter % 10 == 0:
+                print("Processed "+str(progress_counter)+" reads")
+
+            segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
+
+            if not segment_string in gene_counts:
+                gene_counts[segment_string] = 0
+            
+            gene_counts[segment_string] += 1
+
+        # Clean up the gene sequence file
+        os.unlink(fasta_file[1])
+
+        counts[gene["id"]] = gene_counts
+
+    return counts
 
 def get_chexons_segment_string (sequence, genomic_file, position_offset):
-    pass
+    # We need to write the read into a file
+    read_file = tempfile.mkstemp(suffix=".fa", dir=".")
+
+    with open(read_file[1],"w") as out:
+        out.write(f">read\n{sequence}\n")
+
+    # Now we run chexons to get the data
+    chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1]], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+
+    os.unlink(read_file[1]+".comp")
+
+    with open (read_file[1]+".dat") as dat_file:
+        locations = [] 
+        for line in dat_file:
+            if line.startswith("-"):
+                continue
+            if line.startswith("Seg"):
+                continue
+
+            sections = line.split("|")
+
+            if sections[0].strip() == "":
+                continue
+
+            if len(sections) < 4:
+                continue
+
+            start_end = sections[3].strip().split(" ")
+            start = start_end[0]
+            end = start_end[-1]
+
+            locations.append([start,end])
+
+    pieces_of_text = []
+
+    for i in range(len(locations)):
+        if i==0:
+            pieces_of_text.append(str(locations[i][1]))
+        elif i==len(locations)-1:
+            pieces_of_text.append(str(locations[i][0]))
+        else:
+            pieces_of_text.append(f"{locations[i][0]}-{locations[i][1]}")
+
+    # Clean up the chexons output
+    os.unlink(read_file[1]+".dat")
+    os.unlink(read_file[1])
+
+
+    return ":".join(pieces_of_text)
+
 
 
 def get_reads(gene, bam_file):
@@ -100,6 +169,7 @@ def get_reads(gene, bam_file):
     
     # Clean up the bed file
     os.unlink(bed_file[1])
+    samtools_process.wait()
 
     return reads
 
