@@ -96,7 +96,7 @@ def process_bam_file(genes, chromosomes, bam_file):
             warnings.warn(f"Skipping {gene['name']} as we don't have sequence for chromosome {gene['chrom']}")
             continue
 
-        fasta_file = tempfile.mkstemp(suffix=".fa", dir=".")
+        fasta_file = tempfile.mkstemp(suffix=".fa", dir="/dev/shm")
         sequence = chromosomes[gene["chrom"]][(gene["start"]-1):gene["end"]]
 
         with open(fasta_file[1],"w") as out:
@@ -110,7 +110,7 @@ def process_bam_file(genes, chromosomes, bam_file):
 
             # See if we need to print out a progress message
             progress_counter += 1
-            if verbose and progress_counter % 10 == 0:
+            if verbose and progress_counter % 100 == 0:
                 print("Processed "+str(progress_counter)+" reads")
 
             segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
@@ -129,7 +129,7 @@ def process_bam_file(genes, chromosomes, bam_file):
 
 def get_chexons_segment_string (sequence, genomic_file, position_offset):
     # We need to write the read into a file
-    read_file = tempfile.mkstemp(suffix=".fa", dir=".")
+    read_file = tempfile.mkstemp(suffix=".fa", dir="/dev/shm")
 
     with os.fdopen(read_file[0],"w") as out:
         out.write(f">read\n{sequence}\n")
@@ -156,8 +156,8 @@ def get_chexons_segment_string (sequence, genomic_file, position_offset):
                 continue
 
             start_end = sections[3].strip().split(" ")
-            start = start_end[0]
-            end = start_end[-1]
+            start = int(start_end[0])+position_offset-1
+            end = int(start_end[-1])+position_offset-1
 
             locations.append([start,end])
 
@@ -193,7 +193,7 @@ def get_reads(gene, bam_file):
 
     # The filtered region needs to be in a bed file
     
-    bed_file = tempfile.mkstemp(suffix=".bed", dir=".")
+    bed_file = tempfile.mkstemp(suffix=".bed", dir="/dev/shm")
 
     with open(bed_file[1],"w") as out:
         ## TODO: work out how to handle chr names (chr prefix)
