@@ -25,7 +25,130 @@ def main():
     for bam_file in options.bam:
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
 
+    quantitations = collate_splice_variants(quantitations)
+
     write_output(quantitations, genes, options.outfile)
+
+
+def collate_splice_variants(data):
+    # The structure for the data is 
+    # data[bam_file_name][gene_id][splicing_structure] = count
+    # 
+    # We will have all genes in all BAM files, but might
+    # not have all splice forms in all BAM files
+    # 
+    # Here we aim to produce a reduced set of splice variants
+    # by combining variants which differ by only a few positions
+
+    bam_files = list(data.keys())
+
+    genes = data[bam_files[0]].keys()
+
+    # Build the structure for the merged data
+    merged_data = {}
+    for bam in data.keys():
+        merged_data[bam] = {}
+        for gene in genes:
+            merged_data[bam][gene] = {}
+
+    # Now work our way through each gene doing the merging
+    for gene in genes:
+        splice_counts = {}
+
+        for bam in bam_files:
+            these_splices = data[bam][gene].keys()
+
+            for splice in these_splices:
+                if not splice in splice_counts:
+                    splice_counts[splice] = 0
+                
+                splice_counts[splice] += data[bam][gene][splice]
+
+        # Now we can collate the splice counts.  We'll get
+        # back a hash of the original name and the name we're
+        # going to use.
+        # 
+        # We'll give the function the ordered set of splices so
+        # it always uses the most frequently observed one if 
+        # there is duplication
+        splice_name_map = create_splice_name_map(sorted(splice_counts.keys(), key=lambda x:splice_counts[x], reverse=True))
+
+        # From this map we can now build up a new merged set
+        # of quantitations which put together the similar splices
+        for bam in bam_files:
+            these_splices = data[bam][gene].keys()
+
+            for splice in these_splices:
+                used_splice = splice_name_map[splice]
+                if not used_splice in merged_data[bam][gene]:
+                    merged_data[bam][gene][used_splice] = 0
+                
+                merged_data[bam][gene][used_splice] += data[bam][gene][splice]
+
+    return merged_data
+
+
+
+def create_splice_name_map(splices):
+    # This takes an ordered list of splice strings and matches
+    # them on the basis of how similar they are.  We work 
+    # our way down the list trying to match to previous strings
+
+    # How many bases away are we going to allow matches to be?
+    flexibility = 5
+
+    # This is what we'll give back.  Every string will be in this
+    # and we'll match it either to itself or a more popular 
+    # equivalent string
+
+    map_to_return = {}
+
+    # We'll store the good split strings in here so they're easier
+    # to compare to
+    sized_segments = {}
+
+    for splice in splices:
+        # Split it into segments and then parse the numbers out of these
+        segments = splice.split(":")
+
+        parsed_segments = []
+
+        for segment in segments:
+            parsed_segments.append([int(x) for x in segment.split("-")])
+
+        # Now we try to map the parsed segment to existing segments
+
+        # If there are no splices with this size then we accept it and
+        # move on
+        if len(parsed_segments) not in sized_segments:
+            sized_segments[len(parsed_segments)] = [{"segments": parsed_segments, "string":splice}]
+            map_to_return[splice] = splice
+            continue
+
+        # We now test the existing parsed segments to see if they're
+        # close enough to this one.
+        for test_segment in sized_segments[len(parsed_segments)]:
+            too_far = False
+            # Iterate though the segments
+            for i in range(len(parsed_segments)):
+                # Iterate through the start/end positions
+                for j in range(len(parsed_segments[i])):
+                    if abs(parsed_segments[i][j]-test_segment["segments"][i][j]) > flexibility:
+                        too_far = True
+                        break
+                if too_far:
+                    break
+            if not too_far:
+                # We can use this as a match
+                print(f"Merged:\n{splice}\ninto\n{test_segment['string']}\n\n")
+                map_to_return[splice] = test_segment["string"]
+                break
+        
+        # Nothing was close enough, so enter this as a new reference
+        sized_segments[len(parsed_segments)].append({"segments": parsed_segments, "string":splice})
+        map_to_return[splice] = splice
+    
+    return map_to_return
 
 
 
@@ -112,6 +235,8 @@ def process_bam_file(genes, chromosomes, bam_file):
             progress_counter += 1
             if verbose and progress_counter % 100 == 0:
                 print("Processed "+str(progress_counter)+" reads")
+                ## FOR TESTING ONLY ###
+                # break
 
             segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
 
