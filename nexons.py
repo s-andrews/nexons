@@ -40,6 +40,9 @@ def collate_splice_variants(data):
     # Here we aim to produce a reduced set of splice variants
     # by combining variants which differ by only a few positions
 
+    if verbose:
+        print("Merging similar variants")
+
     bam_files = list(data.keys())
 
     genes = data[bam_files[0]].keys()
@@ -90,6 +93,8 @@ def collate_splice_variants(data):
 
 
 def create_splice_name_map(splices):
+    if verbose:
+        print(f"Merging {len(splices)} different splice sites")
     # This takes an ordered list of splice strings and matches
     # them on the basis of how similar they are.  We work 
     # our way down the list trying to match to previous strings
@@ -127,6 +132,7 @@ def create_splice_name_map(splices):
 
         # We now test the existing parsed segments to see if they're
         # close enough to this one.
+        found_hit = False
         for test_segment in sized_segments[len(parsed_segments)]:
             too_far = False
             # Iterate though the segments
@@ -140,13 +146,22 @@ def create_splice_name_map(splices):
                     break
             if not too_far:
                 # We can use this as a match
-                print(f"Merged:\n{splice}\ninto\n{test_segment['string']}\n\n")
+                #print(f"Merged:\n{splice}\ninto\n{test_segment['string']}\n\n")
                 map_to_return[splice] = test_segment["string"]
+                found_hit = True
                 break
         
-        # Nothing was close enough, so enter this as a new reference
-        sized_segments[len(parsed_segments)].append({"segments": parsed_segments, "string":splice})
-        map_to_return[splice] = splice
+        if not found_hit:
+            # Nothing was close enough, so enter this as a new reference
+            sized_segments[len(parsed_segments)].append({"segments": parsed_segments, "string":splice})
+            map_to_return[splice] = splice
+
+    if verbose:
+        dedup_splices = set()
+        for x in map_to_return.values():
+            dedup_splices.add(x)
+        
+        print(f"Produced {len(dedup_splices)} deduplicated splices")
     
     return map_to_return
 
