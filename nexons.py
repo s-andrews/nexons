@@ -25,12 +25,12 @@ def main():
     for bam_file in options.bam:
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
 
-    quantitations = collate_splice_variants(quantitations)
+    quantitations = collate_splice_variants(quantitations,options.flexibility)
 
-    write_output(quantitations, genes, options.outfile)
+    write_output(quantitations, genes, options.outfile, options.mincount)
 
 
-def collate_splice_variants(data):
+def collate_splice_variants(data, flexibility):
     # The structure for the data is 
     # data[bam_file_name][gene_id][splicing_structure] = count
     # 
@@ -74,7 +74,7 @@ def collate_splice_variants(data):
         # We'll give the function the ordered set of splices so
         # it always uses the most frequently observed one if 
         # there is duplication
-        splice_name_map = create_splice_name_map(sorted(splice_counts.keys(), key=lambda x:splice_counts[x], reverse=True))
+        splice_name_map = create_splice_name_map(sorted(splice_counts.keys(), key=lambda x:splice_counts[x], reverse=True),flexibility)
 
         # From this map we can now build up a new merged set
         # of quantitations which put together the similar splices
@@ -92,15 +92,12 @@ def collate_splice_variants(data):
 
 
 
-def create_splice_name_map(splices):
+def create_splice_name_map(splices, flexibility):
     if verbose:
         print(f"Merging {len(splices)} different splice sites")
     # This takes an ordered list of splice strings and matches
     # them on the basis of how similar they are.  We work 
     # our way down the list trying to match to previous strings
-
-    # How many bases away are we going to allow matches to be?
-    flexibility = 5
 
     # This is what we'll give back.  Every string will be in this
     # and we'll match it either to itself or a more popular 
@@ -167,7 +164,7 @@ def create_splice_name_map(splices):
 
 
 
-def write_output(data, gene_annotations, file):
+def write_output(data, gene_annotations, file, mincount):
     # The structure for the data is 
     # data[bam_file_name][gene_id][splicing_structure] = count
     # 
@@ -185,6 +182,8 @@ def write_output(data, gene_annotations, file):
 
         genes = data[bam_files[0]].keys()
 
+        lines_written = 0
+
         for gene in genes:
             splices = set()
 
@@ -198,16 +197,23 @@ def write_output(data, gene_annotations, file):
             for splice in splices:
                 line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
 
+                line_above_min = False
                 for bam in bam_files:
                     if splice in data[bam][gene]:
                         line_values.append(data[bam][gene][splice])
+                        if data[bam][gene][splice] > mincount:
+                            line_above_min = True
                     
                     else:
                         line_values.append(0)
 
-                outfile.write("\t".join([str(x) for x in line_values]))
-                outfile.write("\n")
+                if line_above_min:
+                    lines_written += 1
+                    outfile.write("\t".join([str(x) for x in line_values]))
+                    outfile.write("\n")
 
+    if verbose:
+        print(f"Wrote {lines_written} splices to {file}")
 
 
 
@@ -493,6 +499,20 @@ def get_options():
         "--outfile","-o",
         help="The file to write the output count table to",
         default="nexons_output.txt"
+    )
+
+    parser.add_argument(
+        "--flexibility","-f",
+        help="How many bases different can exon boundaries be and still merge them",
+        default=5, 
+        type=int
+    )
+
+    parser.add_argument(
+        "--mincount","-m",
+        help="What is the minimum number of observations for any given variant to report",
+        default=2, 
+        type=int
     )
 
 
