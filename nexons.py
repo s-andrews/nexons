@@ -16,10 +16,17 @@ def main():
     genes = read_gtf(options.gtf, options.gene)
     if verbose:
         print(f"Found {len(genes.keys())} genes")
+    
+    if len(genes.keys())==0:
+        raise Exception("No genes to process")
 
     chromosomes = read_fasta(options.fasta)
     if verbose:
         print(f"Found {len(chromosomes.keys())} chromosomes")
+
+    if len(chromosomes.keys())==0:
+        raise Exception("No chromosomes found")
+
 
     quantitations = {}
     for bam_file in options.bam:
@@ -250,12 +257,15 @@ def process_bam_file(genes, chromosomes, bam_file):
         gene_counts = {}
         reads = get_reads(gene,bam_file)
 
+        if verbose:
+            print(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
+
         for read_id in reads.keys():
 
             # See if we need to print out a progress message
             progress_counter += 1
             if verbose and progress_counter % 100 == 0:
-                print("Processed "+str(progress_counter)+" reads")
+                print("Processed "+str(progress_counter)+" reads  from "+bam_file)
                 ## FOR TESTING ONLY ###
                 # break
 
@@ -344,8 +354,6 @@ def get_reads(gene, bam_file):
     with open(bed_file[1],"w") as out:
         ## TODO: work out how to handle chr names (chr prefix)
         out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
-
-    print(f"Temp file is {bed_file[1]}")
 
     # Now we can run samtools to get the data
     samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1]], stdout=subprocess.PIPE)
