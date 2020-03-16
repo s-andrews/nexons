@@ -267,7 +267,7 @@ def process_bam_file(genes, chromosomes, bam_file):
             if verbose and progress_counter % 100 == 0:
                 print("Processed "+str(progress_counter)+" reads  from "+bam_file)
                 ## FOR TESTING ONLY ###
-                # break
+                break
 
             segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
 
@@ -355,8 +355,16 @@ def get_reads(gene, bam_file):
         ## TODO: work out how to handle chr names (chr prefix)
         out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
 
-    # Now we can run samtools to get the data
-    samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1]], stdout=subprocess.PIPE)
+    # Now we can run samtools to get the data.  We require that the
+    # read overlaps the relevant region, but we also require that
+    # the reads is on the opposing strand to the gene (since that's how
+    # the directionality of nanopore reads works)
+    #
+    # The filter for forward strand reads is -f 16 and reverse is -F 16
+
+    strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
+
+    samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
     
     for line in iter(lambda: samtools_process.stdout.readline(),""):
         sections = line.decode("utf8").split("\t")
