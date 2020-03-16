@@ -267,14 +267,24 @@ def process_bam_file(genes, chromosomes, bam_file):
             if verbose and progress_counter % 100 == 0:
                 print("Processed "+str(progress_counter)+" reads  from "+bam_file)
                 ## FOR TESTING ONLY ###
-                break
+                #break
 
-            segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
-
-            if not segment_string in gene_counts:
-                gene_counts[segment_string] = 0
             
-            gene_counts[segment_string] += 1
+            # Running chexons will fail if there are no matches between 
+            # the read and the gene (or too short to make a match segment)
+            # We therefore need to catch this and skip any reads which 
+            # trigger it
+
+            try:
+                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
+
+                if not segment_string in gene_counts:
+                    gene_counts[segment_string] = 0
+            
+                gene_counts[segment_string] += 1
+            
+            except:
+                pass
 
         # Clean up the gene sequence file
         os.unlink(fasta_file[1])
@@ -374,6 +384,7 @@ def get_reads(gene, bam_file):
         if sections[0] in reads:
             warnings.warn("Duplicate read name detected "+sections[0])
             continue
+
 
         reads[sections[0]] = sections[9]
     
