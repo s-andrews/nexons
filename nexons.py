@@ -371,8 +371,10 @@ def get_reads(gene, bam_file):
     # the directionality of nanopore reads works)
     #
     # The filter for forward strand reads is -f 16 and reverse is -F 16
+    # the library is opposing strand specific so if we have a forward
+    # strand gene we want -f and we'd use -F for reverse strand.
 
-    strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
+    strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
 
     samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
     
