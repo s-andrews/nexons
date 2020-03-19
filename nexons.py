@@ -30,7 +30,7 @@ def main():
 
     quantitations = {}
     for bam_file in options.bam:
-        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file)
+        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons)
 
     quantitations = collate_splice_variants(quantitations,options.flexibility)
 
@@ -225,7 +225,7 @@ def write_output(data, gene_annotations, file, mincount):
 
 
 
-def process_bam_file(genes, chromosomes, bam_file):
+def process_bam_file(genes, chromosomes, bam_file, min_exons):
     counts = {}
 
     # Let's keep track of how many reads we've processed
@@ -276,15 +276,19 @@ def process_bam_file(genes, chromosomes, bam_file):
             # trigger it
 
             try:
-                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"])
+                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene["start"], min_exons)
 
-                if not segment_string in gene_counts:
-                    gene_counts[segment_string] = 0
-            
-                gene_counts[segment_string] += 1
-            
-            except:
-                pass
+                # This might be None if the transcript didn't pass the filters
+                # we've put in place
+                if segment_string is not None:
+                    if not segment_string in gene_counts:
+                        gene_counts[segment_string] = 0
+                
+                    gene_counts[segment_string] += 1
+                            
+            except Exception as e:
+                print(f"[WARNING] Chexons failed with {e}")
+
 
         # Clean up the gene sequence file
         os.unlink(fasta_file[1])
@@ -293,7 +297,7 @@ def process_bam_file(genes, chromosomes, bam_file):
 
     return counts
 
-def get_chexons_segment_string (sequence, genomic_file, position_offset):
+def get_chexons_segment_string (sequence, genomic_file, position_offset, min_exons):
     # We need to write the read into a file
     read_file = tempfile.mkstemp(suffix=".fa", dir="/dev/shm")
 
@@ -326,6 +330,10 @@ def get_chexons_segment_string (sequence, genomic_file, position_offset):
             end = int(start_end[-1])+position_offset-1
 
             locations.append([start,end])
+
+    # Check that we've got enough exons to keep this
+    if len(locations) < min_exons:
+        return None
 
     pieces_of_text = []
 
@@ -544,6 +552,20 @@ def get_options():
         type=int
     )
 
+    parser.add_argument(
+        "--mincoverage","-c",
+        help="What is the minimum proportion of the gene which must be covered by a variant",
+        default=0.1,
+        type=float
+    )
+
+
+    parser.add_argument(
+        "--minexons","-e",
+        help="What is the minimum number of exons which must be present to count a transcript",
+        default=2,
+        type=int
+    )
 
     parser.add_argument(
         "--gene","-g",
