@@ -9,6 +9,7 @@ Quick Start
 ```
 ./nexons.py \
 --gene=Pkm \
+--verbose \
 test_data/Mus_musculus.GRCm38.99.gtf \
 test_data/Mus_musculus.GRCm38.dna.chromosome.9.fa \
 test_data/test.bam
