@@ -227,7 +227,6 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
  
     with open(file,"w") as outfile:
         # Write the header
-        #header = ["Gene ID", "Gene Name","Chr","Strand","SplicePattern"]
         header = ["Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id"]
         header.extend(bam_files)
         outfile.write("\t".join(header))
@@ -254,15 +253,9 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                 for bam in bam_files:
                     if splice in data[bam][gene]:
                         
-                        #print("\n\n data[bam][gene][splice]")
-                        #print(data[bam][gene][splice])
-                        #print("\n\n splice_info[gene][splice]")
-                        #print(splice_info[gene][splice]["transcript_id"])
-                        #print(splice_info[gene][splice]["count"])
-                        
-                        line_values.append(data[bam][gene][splice])
-                        line_values.append(splice_info[gene][splice]["transcript_id"])# adding the count
-                        line_values.append(splice_info[gene][splice]["count"])
+                        line_values.append(splice_info[gene][splice]["transcript_id"])
+                        line_values.append(data[bam][gene][splice]) # adding the count
+                       # line_values.append(splice_info[gene][splice]["count"]) # this count doesn't work
                         if data[bam][gene][splice] >= mincount:
                             line_above_min = True
                     
