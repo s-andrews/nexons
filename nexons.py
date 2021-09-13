@@ -314,12 +314,12 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
 
             # Now we can go through the splices for all BAM files
             for splice in splices:
-                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
+                #line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
                 splice_split = splice.split(":")
                 splice_start = splice_split[0]
                 splice_end = splice_split.pop()
 
-                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, ".", 0]
+                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, ".", gene_annotations[gene]["strand"], 0]
 
                 splice_text = "splicePattern " + splice
 
@@ -327,7 +327,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                 for bam in bam_files:
                     if splice in data[bam][gene]:
                         
-                        transcript_text = "transcript_id " + splice_info[gene][splice]["transcript_id"]
+                        transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
                         
                         attribute_field = gtf_gene_text + "; " + transcript_text + "; " + splice_text
                         
