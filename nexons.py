@@ -6,12 +6,15 @@ import subprocess
 import os
 
 verbose = False
+gtf_out = False
 
 def main():
     options = get_options()
 
     global verbose
+    global gtf_out
     verbose = options.verbose
+    gtf_out = options.gtf_out
     
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
@@ -53,7 +56,14 @@ def main():
     quantitations = collated_splices[0]
     splice_info = collated_splices[1]
 
-    write_output(quantitations, genes, options.outfile, options.mincount, splice_info)
+    if gtf_out:
+        if options.outfile == "nexons_output.txt":
+            outfile = "nexons_output.gtf"
+        else:
+            outfile = options.outfile
+        write_gtf_output(quantitations, genes, outfile, options.mincount, splice_info)
+    else:
+        write_output(quantitations, genes, options.outfile, options.mincount, splice_info)
 
 
 def collate_splice_variants(data, flexibility, genes_transcripts_exons):
@@ -271,6 +281,72 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
         print(f"Wrote {lines_written} splices to {file}")
 
 
+def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
+    # The structure for the data is 
+    # data[bam_file_name][gene_id][splicing_structure] = count
+    # 
+    # We will have all genes in all BAM files, but might
+    # not have all splice forms in all BAM files
+
+    bam_files = list(data.keys())
+ 
+    with open(file,"w") as outfile:
+        # Write the header
+        header = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
+        #header.extend(bam_files)
+        outfile.write("\t".join(header))
+        outfile.write("\n")
+
+        genes = data[bam_files[0]].keys()
+
+        lines_written = 0
+
+        for gene in genes:
+            splices = set() 
+
+            for bam in bam_files:
+                these_splices = data[bam][gene].keys()
+
+                for splice in these_splices:
+                    splices.add(splice)
+
+            gtf_gene_text = "gene_id " + gene
+
+            # Now we can go through the splices for all BAM files
+            for splice in splices:
+                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
+                splice_split = splice.split(":")
+                splice_start = splice_split[0]
+                splice_end = splice_split.pop()
+
+                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, ".", 0]
+
+                splice_text = "splicePattern " + splice
+
+                line_above_min = False
+                for bam in bam_files:
+                    if splice in data[bam][gene]:
+                        
+                        transcript_text = "transcript_id " + splice_info[gene][splice]["transcript_id"]
+                        
+                        attribute_field = gtf_gene_text + "; " + transcript_text + "; " + splice_text
+                        
+                        line_values[5] = data[bam][gene][splice] # adding the count                        
+                        line_values.append(attribute_field)
+
+                        if data[bam][gene][splice] >= mincount:
+                            line_above_min = True
+                    
+                    else:
+                        line_values.append(0)
+
+                if line_above_min:
+                    lines_written += 1
+                    outfile.write("\t".join([str(x) for x in line_values]))
+                    outfile.write("\n")
+
+    if verbose:
+        print(f"Wrote {lines_written} splices to {file}")
 
 
 def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
@@ -795,8 +871,7 @@ def get_options():
     parser.add_argument(
         "--gtf_out","-t",
         help="Write to gtf file instead of custom nexons format",
-        default=True,
-        type=bool
+        action="store_true"
     )
 
     parser.add_argument(
