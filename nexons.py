@@ -7,14 +7,20 @@ import os
 
 verbose = False
 gtf_out = False
+swap_strand = False
+suppress_name_warnings = False
 
 def main():
     options = get_options()
 
     global verbose
     global gtf_out
+    global swap_strand
+    global suppress_name_warnings
     verbose = options.verbose
     gtf_out = options.gtf_out
+    swap_strand = options.swap_strand
+    suppress_name_warnings = options.suppress_name_warnings   
     
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
@@ -29,7 +35,7 @@ def main():
     for gene_id in genes_transcripts_exons:
         for transcript_id in genes_transcripts_exons[gene_id]["transcripts"]:
             exon_set = genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["exons"]
-            splices = sort_splice_pattern(exon_set)
+            splices = convert_splice_pattern(exon_set)
             genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["splice_patterns"] = splices
      
     if verbose:
@@ -51,6 +57,8 @@ def main():
     quantitations = {}
     for bam_file in options.bam:
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons, options.mincoverage)
+        #print("\n============   quantitations[bam_file]      ")
+        #print(quantitations[bam_file])
 
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     quantitations = collated_splices[0]
@@ -95,35 +103,64 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
     # Now work our way through each gene doing the merging
     for gene in genes:
 
-        unknown_transcript = 1
-        #splice_counts = {} 
+        #unknown_transcript = 0
        
         splice_counts[gene] = {}
        
        # simplifying the splice counts - genes_transcripts_exons[gene]["transcripts"] contains a load of info for that transcript - a dict of start, stop, exons, splice_patterns (maybe it doesn't need that but we'll leave it for now).
+       
+       # seed with the transcripts from the gtf file
         for transcript_id in genes_transcripts_exons[gene]["transcripts"]:
 
+            # structure is splice_counts[gene][splice_pattern]
             splice_counts[gene][genes_transcripts_exons[gene]["transcripts"][transcript_id]["splice_patterns"]] = {
                 "transcript_id": transcript_id,
                 "count": 0
             }
        
-# get all the splice_patterns
+        #print("\n ============ splice_counts[gene].keys()==================")
+        #print(splice_counts[gene].keys())
+        #print(splice_counts[gene].keys())
+       # try saving them separately, sorting, then adding them in
+       
 
+       
+        # get all the splice_patterns
         for bam in bam_files:
             these_splices = data[bam][gene].keys()
 
             for splice in these_splices:
-                #if not splice in splice_counts:
-                if not splice in splice_counts.keys():
+                if not splice in splice_counts[gene].keys():
                     splice_counts[gene][splice] = {
-                        "transcript_id": unknown_transcript,
+                        "transcript_id": "unknown",#_transcript,
                         "count": 0
                     }
-                    unknown_transcript += 1
-                
+                    #unknown_transcript += 1               
                 splice_counts[gene][splice]["count"] += data[bam][gene][splice]
-        # now this is in a slightly different format for accessing the counts
+                
+        # split the dictionary so that we order the known transcripts separately from the novel ones.
+        known_splices = {}
+        novel_splices = {}
+        
+        for splice in splice_counts[gene].keys():
+            if splice_counts[gene][splice]["transcript_id"] == "unknown":
+                novel_splices[splice] = splice_counts[gene][splice]["count"]
+            else:
+                known_splices[splice] = splice_counts[gene][splice]["count"]
+
+        #print("\  novel_splice_counts")
+        #print(novel_splices)
+        
+        # these become sorted lists
+        known_splices_sorted = sorted(known_splices.keys(), key=lambda x:known_splices[x], reverse=True)
+        novel_splices_sorted = sorted(novel_splices.keys(), key=lambda x:novel_splices[x], reverse=True)
+        
+        # join them back together
+        all_splices = known_splices_sorted + novel_splices_sorted
+        
+        #print("\  novel_splice_counts_sorted")
+        #print(novel_splices_sorted)
+        
         
         # Now we can collate the splice counts.  We'll get
         # back a hash of the original name and the name we're
@@ -131,12 +168,9 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
         # 
         # We'll give the function the ordered set of splices so
         # it always uses the most frequently observed one if 
-        # there is duplication - 
-        # but we want the known transcripts at the start.... come back to this and order by most frequent TODO!!
+        # there is duplication -
         
-        splice_name_map = create_splice_name_map(splice_counts[gene].keys(),flexibility) # this now has 
-        #splice_name_map = create_splice_name_map(sorted(splice_counts.keys(), key=lambda x:splice_counts[x], reverse=True),flexibility)
-
+        splice_name_map = create_splice_name_map(all_splices, flexibility) 
 
         # From this map we can now build up a new merged set
         # of quantitations which put together the similar splices
@@ -319,7 +353,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                 splice_start = splice_split[0]
                 splice_end = splice_split.pop()
 
-                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, ".", gene_annotations[gene]["strand"], 0]
+                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
 
                 splice_text = "splicePattern " + splice
 
@@ -329,16 +363,19 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                         
                         transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
                         
-                        attribute_field = gtf_gene_text + "; " + transcript_text + "; " + splice_text
+                        attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
                         
-                        line_values[5] = data[bam][gene][splice] # adding the count                        
-                        line_values.append(attribute_field)
+                        line_values[5] += data[bam][gene][splice]  # adding the count
+                        # if we've got multiple bam files, we want to add up the counts but not keep adding ie. repeating the attribute info.
+                        if(len(line_values) == 8):
+                        
+                            line_values.append(attribute_field)
 
                         if data[bam][gene][splice] >= mincount:
                             line_above_min = True
                     
-                    else:
-                        line_values.append(0)
+                    #else:
+                    #    line_values.append(0)
 
                 if line_above_min:
                     lines_written += 1
@@ -508,6 +545,8 @@ def get_reads(gene, bam_file):
         #out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
         out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n") #Laura 
 
+        print(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+
     # Now we can run samtools to get the data.  We require that the
     # read overlaps the relevant region, but we also require that
     # the reads is on the opposing strand to the gene (since that's how
@@ -517,19 +556,25 @@ def get_reads(gene, bam_file):
     # the library is opposing strand specific so if we have a forward
     # strand gene we want -f and we'd use -F for reverse strand.
 
-    strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
+    if(swap_strand):
+        print("swapping strand\n")
+        strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
+    else:
+        strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
+    #print("strand_filter_string")
+    #print(strand_filter_string)
 
     samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
     
     for line in iter(lambda: samtools_process.stdout.readline(),""):
         sections = line.decode("utf8").split("\t")
+        
         if (len(sections)<9):
             break
-        
+       # print(sections[3])
         if sections[0] in reads:
             warnings.warn("Duplicate read name detected "+sections[0])
             continue
-
 
         reads[sections[0]] = sections[9]
     
@@ -644,8 +689,9 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
                     continue
             
             if transcript_id is None and transcript_name is None:
-                warnings.warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
-                continue
+                if not suppress_name_warnings:
+                    warnings.warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
+                    continue
 
             if transcript_id is None:
                 transcript_id = transcript_name
@@ -654,7 +700,11 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
                 transcript_name = transcript_id
 
             exons = [start, end]
-
+            
+            if genes_transcripts[gene_id]["transcripts"][transcript_id] is None:
+                warnings.warn(f"No entry found for transcript {transcript_id} at exon {chrom}:{start}-{end}")
+                continue
+            
             genes_transcripts[gene_id]["transcripts"][transcript_id]["exons"].append(exons)
                 
     return genes_transcripts
@@ -708,12 +758,14 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
                 continue
 
             if gene_id is None:
-                warnings.warn(f"Using gene name {gene_name} as ID")
-                gene_id = gene_name
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using gene name {gene_name} as ID")
+                    gene_id = gene_name
 
             if gene_name is None:
-                warnings.warn(f"Using gene ID {gene_id} as name")
-                gene_name = gene_id
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using gene ID {gene_id} as name")
+                    gene_name = gene_id
 
             # here we need to check whether gene_name or id is what we're after
             if gene_filter is not None:
@@ -734,12 +786,14 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
                 continue
 
             if transcript_id is None:
-                warnings.warn(f"Using transcript name {transcript_name} as ID")
-                transcript_id = transcript_name
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using transcript name {transcript_name} as ID")
+                    transcript_id = transcript_name
 
             if transcript_name is None:
-                warnings.warn(f"Using transcript ID {transcript_id} as name")
-                transcript_name = transcript_id
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using transcript ID {transcript_id} as name")
+                    transcript_name = transcript_id
                 
             genes_transcripts[gene_id]["transcripts"][transcript_id] = {
                 "name": transcript_name,
@@ -798,12 +852,14 @@ def read_gtf_genes(gtf_file, gene_filter):
                 continue
 
             if gene_id is None:
-                warnings.warn(f"Using gene name {gene_name} as ID")
-                gene_id = gene_name
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using gene name {gene_name} as ID")
+                    gene_id = gene_name
 
             if gene_name is None:
-                warnings.warn(f"Using gene ID {gene_id} as name")
-                gene_name = gene_id
+                if not suppress_name_warnings:
+                    warnings.warn(f"Using gene ID {gene_id} as name")
+                    gene_name = gene_id
 
             if gene_filter is not None:
                 if not (gene_name == gene_filter or gene_id == gene_filter) :
@@ -822,9 +878,9 @@ def read_gtf_genes(gtf_file, gene_filter):
     return genes
 
 # To convert the start/stop exon locations to compatible splice pattern,
-# e.g. 20:35-40:55-65:100 
+# e.g. 20:35-40:55-65:100   
 #def sort_splice_pattern(transcript_dict):
-def sort_splice_pattern(exon_list):
+def convert_splice_pattern(exon_list):
     sorted_exons = sorted(exon_list)  
     #sorted_exons = sorted(transcript_dict["exons"])   
     flat_list = [str(sorted_exons[0][1])] # we only want the end of the first exon
@@ -875,6 +931,12 @@ def get_options():
     )
 
     parser.add_argument(
+        "--swap_strand","-ss",
+        help="Swap the strand filtering - temporary option",
+        action="store_true"
+    )
+
+    parser.add_argument(
         "--flexibility","-f",
         help="How many bases different can exon boundaries be and still merge them",
         default=5, 
@@ -911,6 +973,12 @@ def get_options():
     parser.add_argument(
         "--verbose","-v",
         help="Produce more verbose output",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--suppress_name_warnings",
+        help="suppress warnings about lack of names or ids",
         action="store_true"
     )
 
