@@ -7,6 +7,7 @@ import os
 
 verbose = False
 gtf_out = False
+both_out = False
 swap_strand = False
 suppress_name_warnings = False
 
@@ -15,10 +16,12 @@ def main():
 
     global verbose
     global gtf_out
+    global both_out
     global swap_strand
     global suppress_name_warnings
     verbose = options.verbose
     gtf_out = options.gtf_out
+    both_out = options.both_out
     swap_strand = options.swap_strand
     suppress_name_warnings = options.suppress_name_warnings   
     
@@ -64,7 +67,19 @@ def main():
     quantitations = collated_splices[0]
     splice_info = collated_splices[1]
 
-    if gtf_out:
+    if both_out:
+        if options.outfile == "nexons_output.txt":
+            gtf_outfile = "nexons_output.gtf"
+            custom_outfile = "nexons_output.txt"
+        else:
+            stripped = options.outfile.replace(".txt", "")
+            stripped = stripped.replace(".gtf", "")
+            gtf_outfile = stripped + ".gtf"
+            custom_outfile = stripped + ".txt"            
+            write_gtf_output(quantitations, genes, gtf_outfile, options.mincount, splice_info)
+            write_output(quantitations, genes, custom_outfile, options.mincount, splice_info)
+
+    elif gtf_out:
         if options.outfile == "nexons_output.txt":
             outfile = "nexons_output.gtf"
         else:
@@ -922,6 +937,12 @@ def get_options():
         "--outfile","-o",
         help="The file to write the output count table to",
         default="nexons_output.txt"
+    )
+
+    parser.add_argument(
+        "--both_out","-b",
+        help="Write out to gtf and custom nexons format",
+        action="store_true"
     )
 
     parser.add_argument(
