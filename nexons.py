@@ -9,6 +9,7 @@ verbose = False
 gtf_out = False
 both_out = False
 swap_strand = False
+report_all = False
 suppress_name_warnings = False
 
 def main():
@@ -18,11 +19,13 @@ def main():
     global gtf_out
     global both_out
     global swap_strand
+    global report_all
     global suppress_name_warnings
     verbose = options.verbose
     gtf_out = options.gtf_out
     both_out = options.both_out
     swap_strand = options.swap_strand
+    report_all = options.report_all
     suppress_name_warnings = options.suppress_name_warnings   
     
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
@@ -320,11 +323,16 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                     
                     else:
                         line_values.append(0)
-
-                if line_above_min:
+                
+                if report_all:
                     lines_written += 1
                     outfile.write("\t".join([str(x) for x in line_values]))
                     outfile.write("\n")
+                else:                
+                    if line_above_min:
+                        lines_written += 1
+                        outfile.write("\t".join([str(x) for x in line_values]))
+                        outfile.write("\n")
 
     if verbose:
         print(f"Wrote {lines_written} splices to {file}")
@@ -337,65 +345,92 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
 
+    # make a copy so we can get get counts, including 0s.
+    # The counts in the original are the number of splices that mapped exactly, not taking into account the flexibility factor.
+    splice_info_copy = splice_info.copy()
+    # set all counts to 0
+    for gene in splice_info_copy:
+        splice_copy_splices = splice_info_copy[gene].keys()
+        for splice_pat in splice_copy_splices: 
+            splice_info_copy[gene][splice_pat]["merged_count"] = 0       
+
     bam_files = list(data.keys())
  
-    with open(file,"w") as outfile:
-        # Write the header
-        header = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
-        #header.extend(bam_files)
-        outfile.write("\t".join(header))
-        outfile.write("\n")
+    with open("match_info.txt","w") as report_all_outfile:
+        if report_all:
+            report_all_header = ["seqname", "source", "feature", "start", "end", "id", "exact_count", "merged_count", "splice_pattern"]
+            report_all_outfile.write("\t".join(report_all_header))
+            report_all_outfile.write("\n")
+ 
+        with open(file,"w") as outfile:
+            # Write the header
+            header = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
+            #header.extend(bam_files)
+            outfile.write("\t".join(header))
+            outfile.write("\n")
 
-        genes = data[bam_files[0]].keys()
+            genes = data[bam_files[0]].keys()
 
-        lines_written = 0
+            lines_written = 0
 
-        for gene in genes:
-            splices = set() 
+            for gene in genes:
+                splices = set() 
 
-            for bam in bam_files:
-                these_splices = data[bam][gene].keys()
-
-                for splice in these_splices:
-                    splices.add(splice)
-
-            gtf_gene_text = "gene_id " + gene
-
-            # Now we can go through the splices for all BAM files
-            for splice in splices:
-                #line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
-                splice_split = splice.split(":")
-                splice_start = splice_split[0]
-                splice_end = splice_split.pop()
-
-                line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
-
-                splice_text = "splicePattern " + splice
-
-                line_above_min = False
                 for bam in bam_files:
-                    if splice in data[bam][gene]:
-                        
-                        transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
-                        
-                        attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
-                        
-                        line_values[5] += data[bam][gene][splice]  # adding the count
-                        # if we've got multiple bam files, we want to add up the counts but not keep adding ie. repeating the attribute info.
-                        if(len(line_values) == 8):
-                        
-                            line_values.append(attribute_field)
+                    these_splices = data[bam][gene].keys()
 
-                        if data[bam][gene][splice] >= mincount:
-                            line_above_min = True
-                    
-                    #else:
-                    #    line_values.append(0)
+                    for splice in these_splices:
+                        splices.add(splice)
 
-                if line_above_min:
-                    lines_written += 1
-                    outfile.write("\t".join([str(x) for x in line_values]))
-                    outfile.write("\n")
+                gtf_gene_text = "gene_id " + gene
+
+                # Now we can go through the splices for all BAM files
+                for splice in splices:
+                    #line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
+                    splice_split = splice.split(":")
+                    splice_start = splice_split[0]
+                    splice_end = splice_split.pop()
+
+                    line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
+
+                    splice_text = "splicePattern " + splice
+
+                    line_above_min = False
+                    for bam in bam_files:
+                        if splice in data[bam][gene]:
+                           
+                            transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
+                            
+                            attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
+                            
+                            line_values[5] += data[bam][gene][splice]  # adding the count
+                            # if we've got multiple bam files, we want to add up the counts but not keep adding ie. repeating the attribute info.
+                            if(len(line_values) == 8):
+                            
+                                line_values.append(attribute_field)
+
+                            if data[bam][gene][splice] >= mincount:
+                                line_above_min = True
+                                
+                            # set the count in the splice copy dict
+                            splice_info_copy[gene][splice]["merged_count"] += data[bam][gene][splice]
+      
+                    if line_above_min:
+                        lines_written += 1
+                        outfile.write("\t".join([str(x) for x in line_values]))
+                        outfile.write("\n")
+                        
+            if report_all:
+
+                splice_info_splices = splice_info_copy[gene].keys()
+                for splice_info_splice in splice_info_splices: 
+                    splice_is_split = splice_info_splice.split(":")
+                    splice_is_start = splice_is_split[0]
+                    splice_is_end = splice_is_split.pop()
+                    other_info = splice_info_copy[gene][splice_info_splice]
+                    out_line = [gene, "nexons", "transcript", splice_is_start, splice_is_end, other_info["transcript_id"], other_info["count"], other_info["merged_count"], splice_info_splice]
+                    report_all_outfile.write("\t".join([str(x) for x in out_line]))
+                    report_all_outfile.write("\n")
 
     if verbose:
         print(f"Wrote {lines_written} splices to {file}")
@@ -994,6 +1029,12 @@ def get_options():
     parser.add_argument(
         "--verbose","-v",
         help="Produce more verbose output",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--report_all",
+        help="Report all transcripts, including seeded ones with no counts. Only works with --gtf_out or --both_out",
         action="store_true"
     )
 
