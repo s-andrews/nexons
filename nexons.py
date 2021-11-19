@@ -11,6 +11,7 @@ both_out = False
 swap_strand = False
 report_all = False
 suppress_name_warnings = False
+verbose_proportions = False
 
 def main():
     options = get_options()
@@ -21,12 +22,14 @@ def main():
     global swap_strand
     global report_all
     global suppress_name_warnings
+    global verbose_proportions
     verbose = options.verbose
     gtf_out = options.gtf_out
     both_out = options.both_out
     swap_strand = options.swap_strand
     report_all = options.report_all
-    suppress_name_warnings = options.suppress_name_warnings   
+    suppress_name_warnings = options.suppress_name_warnings
+    verbose_proportions = options.verbose_proportions
     
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
@@ -62,9 +65,7 @@ def main():
 
     quantitations = {}
     for bam_file in options.bam:
-        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons, options.mincoverage)
-        #print("\n============   quantitations[bam_file]      ")
-        #print(quantitations[bam_file])
+        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons, options.mincoverage, options.mapthreshold)
 
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     quantitations = collated_splices[0]
@@ -436,7 +437,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
         print(f"Wrote {lines_written} splices to {file}")
 
 
-def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
+def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage, map_threshold):
     counts = {}
 
     # we need a set of splices that are passed in - that need to be in a dictionary of gene_ids as there may be 
@@ -491,8 +492,13 @@ def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
             # trigger it
 
             try:
-                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene, min_exons, min_coverage)
-
+                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene, min_exons, min_coverage, map_threshold)
+                
+                #print("read")
+                #print(reads[read_id])
+                #print("segment_string")
+                #print(segment_string)
+                
                 # This might be None if the transcript didn't pass the filters
                 # we've put in place
                 if segment_string is not None:
@@ -512,7 +518,7 @@ def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
 
     return counts
 
-def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_coverage):
+def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_coverage, map_threshold):
 
     position_offset = gene["start"]
     # We need to write the read into a file
@@ -526,27 +532,59 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
     os.unlink(read_file[1]+".comp")
 
+    count = 0
+    start_cDNA = 0
+    end_cDNA = 0
+    cDNA_length = 0
+    full_sequence_length = len(sequence)
+
     with open (read_file[1]+".dat") as dat_file:
         locations = [] 
         for line in dat_file:
+            #print("\nchexons line:")
+            #print(line)
+        
             if line.startswith("-"):
                 continue
             if line.startswith("Seg"):
+                count = 0
                 continue
 
             sections = line.split("|")
-
+            
             if sections[0].strip() == "":
                 continue
 
             if len(sections) < 4:
                 continue
 
+            count += 1
+
+            if count == 1:
+                start_end_cDNA = sections[1].strip().split(" ")
+                start_cDNA = int(start_end_cDNA[0])
+
             start_end = sections[3].strip().split(" ")
             start = int(start_end[0])+position_offset-1
             end = int(start_end[-1])+position_offset-1
 
             locations.append([start,end])
+        
+            start_end_cDNA = sections[1].strip().split(" ")           
+            end_cDNA = int(start_end_cDNA[-1])
+        cDNA_length = end_cDNA - start_cDNA
+    
+    #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
+    proportion_mapped = cDNA_length/full_sequence_length
+    
+    if verbose_proportions:
+        print(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
+
+    # Check that enough of the sequence has been mapped
+    if proportion_mapped < map_threshold:
+        if verbose_proportions:
+            print(f"Discarding sequence as proportion mapped is too low")
+        return None
 
     # Check that we've got enough exons to keep this
     if len(locations) < min_exons:
@@ -1013,6 +1051,12 @@ def get_options():
         type=float
     )
 
+    parser.add_argument(
+        "--mapthreshold","-mt",
+        help="What is the minimum proportion of the sequence that must be mapped to a transcript",
+        default=0.1,
+        type=float
+    )
 
     parser.add_argument(
         "--minexons","-e",
@@ -1033,8 +1077,14 @@ def get_options():
     )
 
     parser.add_argument(
+        "--verbose_proportions","-vp",
+        help="Print out all proportions of sequences mapped",
+        action="store_true"
+    )
+
+    parser.add_argument(
         "--report_all",
-        help="Report all transcripts, including seeded ones with no counts. Only works with --gtf_out or --both_out",
+        help="Report all transcripts, including seeded ones with no counts. Only works with --gtf_out or --both_out. Writes to a separate file named match_info.txt",
         action="store_true"
     )
 
