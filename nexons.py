@@ -30,7 +30,7 @@ def main():
 
     quantitations = {}
     for bam_file in options.bam:
-        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons, options.mincoverage)
+        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage)
 
     quantitations = collate_splice_variants(quantitations,options.flexibility)
 
@@ -225,7 +225,7 @@ def write_output(data, gene_annotations, file, mincount):
 
 
 
-def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
+def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_coverage):
     counts = {}
 
     # Let's keep track of how many reads we've processed
@@ -255,7 +255,7 @@ def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage):
 
  
         gene_counts = {}
-        reads = get_reads(gene,bam_file)
+        reads = get_reads(gene,bam_file, direction)
 
         if verbose:
             print(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
@@ -360,7 +360,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
 
 
-def get_reads(gene, bam_file):
+def get_reads(gene, bam_file, direction):
     # We get all reads which sit within the area of the 
     # bam file.  Since it's a BAM file we need to use 
     # samtools to extract the reads.
@@ -376,25 +376,45 @@ def get_reads(gene, bam_file):
     bed_file = tempfile.mkstemp(suffix=".bed", dir="/dev/shm")
 
     with open(bed_file[1],"w") as out:
-        ## TODO: work out how to handle chr names (chr prefix)
-        out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+        # Some chromosome names will already start with chr but we need
+        # to add it here if it doesn't already
+        if gene['chrom'].startswith("chr"):
+            out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+
+        else:
+            out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
 
     # Now we can run samtools to get the data.  We require that the
-    # read overlaps the relevant region, but we also require that
-    # the reads is on the opposing strand to the gene (since that's how
-    # the directionality of nanopore reads works)
+    # read overlaps the relevant region, but we also check the direction
+    # of the read.  Different library preps generate different directions
+    # so this can be 'none', 'same' or 'opposing'.
     #
     # The filter for forward strand reads is -f 16 and reverse is -F 16
     # the library is opposing strand specific so if we have a forward
     # strand gene we want -f and we'd use -F for reverse strand.
 
-    strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
+    if direction == "none":
+        #print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1])
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1]], stdout=subprocess.PIPE)
 
-    samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+    elif direction == "opposing":
+        strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
+        #print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+
+    elif direction == "same":
+        strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
+        #print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+
+    else:
+        raise Exception("Didn't understand directionality "+direction)
+
     
     for line in iter(lambda: samtools_process.stdout.readline(),""):
         sections = line.decode("utf8").split("\t")
         if (len(sections)<9):
+            print("Only",len(sections),"sections, so exiting")
             break
         
         if sections[0] in reads:
@@ -508,6 +528,8 @@ def read_gtf(gtf_file, gene_filter):
                 if not (gene_name == gene_filter or gene_id == gene_filter) :
                     continue
 
+            print(gene_name, gene_id, chrom, start, end, strand)
+
             genes[gene_id] = {
                 "name":gene_name,
                 "id": gene_id,
@@ -576,6 +598,13 @@ def get_options():
     parser.add_argument(
         "--gene","-g",
         help="The name or ID of a single gene to quantitate"
+    )
+
+
+    parser.add_argument(
+        "--direction","-d",
+        help="The directionality of the library (none, same, opposing)",
+        default="none"
     )
 
     parser.add_argument(
