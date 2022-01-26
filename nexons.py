@@ -8,10 +8,10 @@ import os
 verbose = False
 gtf_out = False
 both_out = False
-swap_strand = False
 report_all = False
 suppress_name_warnings = False
 verbose_proportions = False
+no_chr_prefix = False
 
 def main():
     options = get_options()
@@ -19,17 +19,17 @@ def main():
     global verbose
     global gtf_out
     global both_out
-    global swap_strand
     global report_all
     global suppress_name_warnings
     global verbose_proportions
+    global no_chr_prefix
     verbose = options.verbose
     gtf_out = options.gtf_out
     both_out = options.both_out
-    swap_strand = options.swap_strand
     report_all = options.report_all
     suppress_name_warnings = options.suppress_name_warnings
     verbose_proportions = options.verbose_proportions
+    no_chr_prefix = options.no_chr_prefix
     
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
@@ -65,7 +65,7 @@ def main():
 
     quantitations = {}
     for bam_file in options.bam:
-        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.minexons, options.mincoverage, options.mapthreshold)
+        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage, options.mapthreshold)
 
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     quantitations = collated_splices[0]
@@ -437,7 +437,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
         print(f"Wrote {lines_written} splices to {file}")
 
 
-def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage, map_threshold):
+def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_coverage, map_threshold):
     counts = {}
 
     # we need a set of splices that are passed in - that need to be in a dictionary of gene_ids as there may be 
@@ -471,7 +471,7 @@ def process_bam_file(genes, chromosomes, bam_file, min_exons, min_coverage, map_
 
  
         gene_counts = {}# this is where we seed the transcripts I think 
-        reads = get_reads(gene,bam_file)
+        reads = get_reads(gene,bam_file,direction)
 
         if verbose:
             print(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
@@ -613,7 +613,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
 
 
-def get_reads(gene, bam_file):
+def get_reads(gene, bam_file, direction):
     # We get all reads which sit within the area of the 
     # bam file.  Since it's a BAM file we need to use 
     # samtools to extract the reads.
@@ -629,35 +629,52 @@ def get_reads(gene, bam_file):
     bed_file = tempfile.mkstemp(suffix=".bed", dir="/dev/shm")
 
     with open(bed_file[1],"w") as out:
-        ## TODO: work out how to handle chr names (chr prefix)
-        #out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
-        out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n") #Laura 
+    
+        if(no_chr_prefix):
+            out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n") 
+            
+        else:
+            # Some chromosome names will already start with chr but we need
+            # to add it here if it doesn't already
+            if gene['chrom'].startswith("chr"):
+                out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
 
-        print(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+            else:
+                out.write(f"chr{gene['chrom']}\t{gene['start']}\t{gene['end']}\n")
+
 
     # Now we can run samtools to get the data.  We require that the
-    # read overlaps the relevant region, but we also require that
-    # the reads is on the opposing strand to the gene (since that's how
-    # the directionality of nanopore reads works)
+    # read overlaps the relevant region, but we also check the direction
+    # of the read.  Different library preps generate different directions
+    # so this can be 'none', 'same' or 'opposing'.
     #
     # The filter for forward strand reads is -f 16 and reverse is -F 16
     # the library is opposing strand specific so if we have a forward
     # strand gene we want -f and we'd use -F for reverse strand.
 
-    if(swap_strand):
-        print("swapping strand\n")
-        strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
-    else:
-        strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
-    #print("strand_filter_string")
-    #print(strand_filter_string)
+    if direction == "none":
+        #print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1])
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1]], stdout=subprocess.PIPE)
 
-    samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+    elif direction == "opposing":
+        strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
+        print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+
+    elif direction == "same":
+        strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
+        print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
+
+    else:
+        raise Exception("Didn't understand directionality "+direction)
+
     
     for line in iter(lambda: samtools_process.stdout.readline(),""):
         sections = line.decode("utf8").split("\t")
         
         if (len(sections)<9):
+            print("Only",len(sections),"sections, so exiting")
             break
        # print(sections[3])
         if sections[0] in reads:
@@ -953,6 +970,8 @@ def read_gtf_genes(gtf_file, gene_filter):
                 if not (gene_name == gene_filter or gene_id == gene_filter) :
                     continue
             
+            print(gene_name, gene_id, chrom, start, end, strand)
+            
             genes[gene_id] = {
                 "name":gene_name,
                 "id": gene_id,
@@ -1025,12 +1044,6 @@ def get_options():
     )
 
     parser.add_argument(
-        "--swap_strand","-ss",
-        help="Swap the strand filtering - temporary option",
-        action="store_true"
-    )
-
-    parser.add_argument(
         "--flexibility","-f",
         help="How many bases different can exon boundaries be and still merge them",
         default=5, 
@@ -1068,6 +1081,18 @@ def get_options():
     parser.add_argument(
         "--gene","-g",
         help="The name or ID of a single gene to quantitate"
+    )
+
+    parser.add_argument(
+        "--direction","-d",
+        help="The directionality of the library (none, same, opposing)",
+        default="none"
+    )
+
+    parser.add_argument(
+        "--no_chr_prefix","-nc",
+        help="Don't add a 'chr' prefix in temp bed file (required for SIRV sequences where chr doesn't start with 'chr'",
+        action="store_true"
     )
 
     parser.add_argument(
