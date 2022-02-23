@@ -134,28 +134,33 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
             # structure is splice_counts[gene][splice_pattern]
             splice_counts[gene][genes_transcripts_exons[gene]["transcripts"][transcript_id]["splice_patterns"]] = {
                 "transcript_id": transcript_id,
-                "count": 0
+                "count": 0,
+                "strand": genes_transcripts_exons[gene]["transcripts"][transcript_id]["strand"]
             }
-       
+            
+        #    print(f"strand = {genes_transcripts_exons[gene]['transcripts'][transcript_id]['strand']}")
         #print("\n ============ splice_counts[gene].keys()==================")
         #print(splice_counts[gene].keys())
         #print(splice_counts[gene].keys())
        # try saving them separately, sorting, then adding them in
        
-
-       
         # get all the splice_patterns
         for bam in bam_files:
             these_splices = data[bam][gene].keys()
-
+           # print(f"data[bam][gene]: {data[bam][gene]}")
+            
             for splice in these_splices:
+                
                 if not splice in splice_counts[gene].keys():
                     splice_counts[gene][splice] = {
                         "transcript_id": "unknown",#_transcript,
-                        "count": 0
+                        "count": 0,
+                        "strand": "tbc"
                     }
                     #unknown_transcript += 1               
                 splice_counts[gene][splice]["count"] += data[bam][gene][splice]
+                
+              #  print(f"splice counts info: {splice_counts[gene][splice]}")
                 
         # split the dictionary so that we order the known transcripts separately from the novel ones.
         known_splices = {}
@@ -311,14 +316,14 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
             # Now we can go through the splices for all BAM files
             for splice in splices:
                 line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
-
+                line_values.append(splice_info[gene][splice]["transcript_id"])
+                
                 line_above_min = False
                 for bam in bam_files:
+                    #print(f"data[bam][gene] = {data[bam][gene]}")
                     if splice in data[bam][gene]:
                         
-                        line_values.append(splice_info[gene][splice]["transcript_id"])
                         line_values.append(data[bam][gene][splice]) # adding the count
-                       # line_values.append(splice_info[gene][splice]["count"]) # this count doesn't work
                         if data[bam][gene][splice] >= mincount:
                             line_above_min = True
                     
@@ -402,6 +407,9 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                            
                             transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
                             
+                            print(f"splice is  {splice}")
+                            print(f"splice info  {splice_info[gene][splice]}")
+                            
                             attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
                             
                             line_values[5] += data[bam][gene][splice]  # adding the count
@@ -468,7 +476,6 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
 
         with open(fasta_file[1],"w") as out:
             out.write(f">{gene['name']}\n{sequence}\n")
-
  
         gene_counts = {}# this is where we seed the transcripts I think 
         reads = get_reads(gene,bam_file,direction)
@@ -527,6 +534,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     with os.fdopen(read_file[0],"w") as out:
         out.write(f">read\n{sequence}\n")
 
+
     # Now we run chexons to get the data
     chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1]], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
@@ -552,11 +560,19 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
             sections = line.split("|")
             
+           # print(f"chexons sections: {sections}")
+            
             if sections[0].strip() == "":
                 continue
 
             if len(sections) < 4:
                 continue
+           
+            #if sections[2].strip().split(" ")[1] == "F":
+            #    potential_direction = "F"
+            #else: 
+                #potential_direction = sections[2].strip().split(" ")[1]
+            #    print(f"potential_direction: {sections[2]}")
 
             count += 1
 
