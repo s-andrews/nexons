@@ -32,17 +32,22 @@ with open(input_file) as f:
         
         row = line.split("\t")
     
-        info = row[8]
+        info = row[8].rstrip("\n")
         info_split = info.split(";")
         splices = info_split[2]
         splices_split = splices.split(":")
         splices_split.pop(0) 
-        
+        exon_count = 0
+
         for exon in splices_split:
+            #print(f'exon count: {exon_count}')
             exon_start_end = exon.split("-")
             if len(exon_start_end) == 2:
-            
-                out.write(f'{row[0]}\t{row[1]}\texon\t{exon_start_end[0]}\t{exon_start_end[1]}\t{row[5]}\t{row[6]}\t{row[7]}\t{row[8]}')
+                exon_count_string = str(exon_count)
+                info_incl_exon = info + '; exon_number ' + '"' + exon_count_string + '";'
+                #print(f'info_incl_exon: {info_incl_exon}')
+                out.write(f'{row[0]}\t{row[1]}\texon\t{exon_start_end[0]}\t{exon_start_end[1]}\t{row[5]}\t{row[6]}\t{row[7]}\t{info_incl_exon}\n')
+            exon_count += 1
 
         try:
             line = f.readline()
