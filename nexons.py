@@ -6,6 +6,8 @@ import os
 import sys
 from progressbar import ProgressBar, Percentage, Bar
 
+VERSION = "0.1.devel"
+
 verbose = False
 quiet = False
 gtf_out = False
@@ -493,6 +495,8 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         # the gene region, but we might want to add some
         # context sequence
         gene = genes[gene_id]
+
+        log(f"Quantitating {gene_id} in {bam_file}")
 
         # Check that we have the sequence for this gene
         if not gene["chrom"] in chromosomes:
@@ -1166,6 +1170,13 @@ def get_options():
         "--suppress_warnings",
         help="Suppress warnings (eg about lack of names or ids)",
         action="store_true"
+    )
+
+    parser.add_argument(
+        "--version",
+        help="Print version and exit",
+        action="version",
+        version=f"Nexons version {VERSION}"
     )
 
     return(parser.parse_args())
