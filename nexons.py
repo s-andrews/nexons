@@ -8,34 +8,9 @@ from progressbar import ProgressBar, Percentage, Bar
 
 VERSION = "0.1.devel"
 
-verbose = False
-quiet = False
-gtf_out = False
-both_out = False
-report_all = False
-suppress_warnings = False
-verbose_proportions = False
-no_chr_prefix = False
-
 def main():
+    global options
     options = get_options()
-
-    global verbose
-    global quiet
-    global gtf_out
-    global both_out
-    global report_all
-    global suppress_warnings
-    global verbose_proportions
-    global no_chr_prefix
-    verbose = options.verbose
-    quiet = options.quiet
-    gtf_out = options.gtf_out
-    both_out = options.both_out
-    report_all = options.report_all
-    suppress_warnings = options.suppress_warnings
-    verbose_proportions = options.verbose_proportions
-    no_chr_prefix = options.no_chr_prefix
     
     # Read the details from the GTF for the requested genes
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
@@ -91,7 +66,7 @@ def main():
     quantitations = collated_splices[0]
     splice_info = collated_splices[1]
 
-    if both_out:
+    if options.both_out:
         if options.outfile == "nexons_output.txt":
             gtf_outfile = "nexons_output.gtf"
             custom_outfile = "nexons_output.txt"
@@ -103,7 +78,7 @@ def main():
             write_gtf_output(quantitations, genes, gtf_outfile, options.mincount, splice_info)
             write_output(quantitations, genes, custom_outfile, options.mincount, splice_info)
 
-    elif gtf_out:
+    elif options.gtf_out:
         if options.outfile == "nexons_output.txt":
             outfile = "nexons_output.gtf"
         else:
@@ -113,16 +88,16 @@ def main():
         write_output(quantitations, genes, options.outfile, options.mincount, splice_info)
 
 def log (message):
-    if not quiet:
+    if not options.quiet:
         print("LOG:",message, file=sys.stderr)
 
 def warn (message):
-    if not suppress_warnings:
+    if not options.suppress_warnings:
         print("WARN:",message, file=sys.stderr)
 
 
 def debug (message):
-    if verbose:
+    if options.verbose:
         print("DEBUG:",message, file=sys.stderr)
 
 
@@ -305,7 +280,7 @@ def create_splice_name_map(splices, flexibility):
             sized_segments[len(parsed_segments)].append({"segments": parsed_segments, "string":splice})
             map_to_return[splice] = splice
 
-    if verbose:
+    if options.verbose:
         dedup_splices = set()
         for x in map_to_return.values():
             dedup_splices.add(x)
@@ -362,7 +337,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                     else:
                         line_values.append(0)
                 
-                if report_all:
+                if options.report_all:
                     lines_written += 1
                     outfile.write("\t".join([str(x) for x in line_values]))
                     outfile.write("\n")
@@ -394,7 +369,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
     bam_files = list(data.keys())
  
     with open("match_info.txt","w") as report_all_outfile:
-        if report_all:
+        if options.report_all:
             report_all_header = ["seqname", "source", "feature", "start", "end", "id", "exact_count", "merged_count", "splice_pattern"]
             report_all_outfile.write("\t".join(report_all_header))
             report_all_outfile.write("\n")
@@ -460,7 +435,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                         outfile.write("\t".join([str(x) for x in line_values]))
                         outfile.write("\n")
                         
-            if report_all:
+            if options.report_all:
 
                 splice_info_splices = splice_info_copy[gene].keys()
                 for splice_info_splice in splice_info_splices: 
@@ -515,14 +490,14 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         debug(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
 
         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(reads))
-        if not quiet:
+        if not options.quiet:
             pbar.start()
 
         for read_id in reads.keys():
 
             # See if we need to print out a progress message
             progress_counter += 1
-            if not quiet:
+            if not options.quiet:
                 pbar.update(progress_counter)
             
             # Running chexons will fail if there are no matches between 
@@ -549,7 +524,7 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
             except Exception as e:
                 warn(f"[WARNING] Chexons failed with {e}")
 
-        if not quiet:
+        if not options.quiet:
             pbar.finish()
 
         # Clean up the gene sequence file
@@ -637,12 +612,12 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
     proportion_mapped = cDNA_length/full_sequence_length
     
-    if verbose_proportions:
+    if options.verbose_proportions:
         debug(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
 
     # Check that enough of the sequence has been mapped
     if proportion_mapped < map_threshold:
-        if verbose_proportions:
+        if options.verbose_proportions:
             debug(f"Discarding sequence as proportion mapped is too low")
         return None
 
@@ -690,7 +665,7 @@ def get_reads(gene, bam_file, direction):
 
     with open(bed_file[1],"w") as out:
     
-        if(no_chr_prefix):
+        if(options.no_chr_prefix):
             out.write(f"{gene['chrom']}\t{gene['start']}\t{gene['end']}\n") 
             
         else:
