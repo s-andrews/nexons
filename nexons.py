@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 import argparse
-import warnings
 import tempfile
 import subprocess
 import os
+import sys
 
 verbose = False
+quiet = False
 gtf_out = False
 both_out = False
 report_all = False
-suppress_name_warnings = False
+suppress_warnings = False
 verbose_proportions = False
 no_chr_prefix = False
 
@@ -17,56 +18,73 @@ def main():
     options = get_options()
 
     global verbose
+    global quiet
     global gtf_out
     global both_out
     global report_all
-    global suppress_name_warnings
+    global suppress_warnings
     global verbose_proportions
     global no_chr_prefix
     verbose = options.verbose
+    quiet = options.quiet
     gtf_out = options.gtf_out
     both_out = options.both_out
     report_all = options.report_all
-    suppress_name_warnings = options.suppress_name_warnings
+    suppress_warnings = options.suppress_warnings
     verbose_proportions = options.verbose_proportions
     no_chr_prefix = options.no_chr_prefix
     
+    # Read the details from the GTF for the requested genes
     # for now, we're going to read the gtf multiple times, as first we want the genes, then transcripts, then exons. 
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
-    genes = read_gtf_genes(options.gtf, options.gene)   
+    log(f"Reading genes from {options.gtf} with gene list {options.gene}")
+
+    genes = read_gtf_genes(options.gtf, options.gene)
+    debug(f"Read details for {len(genes)} genes")
     
     genes_transcripts = read_gtf_transcripts(options.gtf, options.gene, genes)
+    debug("Read transcripts")
     
     genes_transcripts_exons = read_gtf_exons(options.gtf, options.gene, genes_transcripts)
-
+    debug("Read exons")
 
     # now all the exons have been imported from the gtf, we can convert the splice patterns to a compatible format.
+    debug("Converting splice patterns")
     for gene_id in genes_transcripts_exons:
         for transcript_id in genes_transcripts_exons[gene_id]["transcripts"]:
             exon_set = genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["exons"]
             splices = convert_splice_pattern(exon_set)
             genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["splice_patterns"] = splices
      
-    if verbose:
-        print(f"Found {len(genes.keys())} genes")
-       # print(f"Found {len(transcripts.keys())} transcripts")
+    log(f"Found {len(genes.keys())} genes")
     
     if len(genes.keys())==0:
         raise Exception("No genes to process")
 
+    log(f"Reading chromosomes from {options.fasta}")
     chromosomes = read_fasta(options.fasta)
-    if verbose:
-        print(f"Found {len(chromosomes.keys())} chromosomes")
+    
+    log(f"Found {len(chromosomes.keys())} chromosomes")
 
     if len(chromosomes.keys())==0:
         raise Exception("No chromosomes found")
 
-    # pass in splice_patterns as an argument to process_bam_file
-
+    # Process each of the BAM files and add their data to the quantitations
     quantitations = {}
-    for bam_file in options.bam:
+    for count,bam_file in enumerate(options.bam):
+        log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
         quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage, options.mapthreshold)
+ 
+        observations = 0
+        for gene in quantitations[bam_file].keys():
+            for count in quantitations[bam_file][gene].values():
+                observations += count
 
+        log(f"Found {observations} valid splices in {bam_file}")
+        breakpoint()
+
+
+    log("Collating splice variants")
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     quantitations = collated_splices[0]
     splice_info = collated_splices[1]
@@ -92,6 +110,20 @@ def main():
     else:
         write_output(quantitations, genes, options.outfile, options.mincount, splice_info)
 
+def log (message):
+    if not quiet:
+        print(message, file=sys.stderr)
+
+def warn (message):
+    if not suppress_warnings:
+        print("WARN:",message, file=sys.stderr)
+
+
+def debug (message):
+    if verbose:
+        print("DEBUG:",message, file=sys.stderr)
+
+
 
 def collate_splice_variants(data, flexibility, genes_transcripts_exons):
     # The structure for the data is 
@@ -103,8 +135,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
     # Here we aim to produce a reduced set of splice variants
     # by combining variants which differ by only a few positions
 
-    if verbose:
-        print("Merging similar variants")
+    debug("Merging similar variants")
 
     bam_files = list(data.keys())
 
@@ -138,11 +169,11 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
                 "strand": genes_transcripts_exons[gene]["transcripts"][transcript_id]["strand"]
             }
             
-        #    print(f"strand = {genes_transcripts_exons[gene]['transcripts'][transcript_id]['strand']}")
+        #print(f"strand = {genes_transcripts_exons[gene]['transcripts'][transcript_id]['strand']}")
         #print("\n ============ splice_counts[gene].keys()==================")
         #print(splice_counts[gene].keys())
         #print(splice_counts[gene].keys())
-       # try saving them separately, sorting, then adding them in
+        #try saving them separately, sorting, then adding them in
        
         # get all the splice_patterns
         for bam in bam_files:
@@ -213,8 +244,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
 
 
 def create_splice_name_map(splices, flexibility):
-    if verbose:
-        print(f"Merging {len(splices)} different splice sites")
+    debug(f"Merging {len(splices)} different splice sites")
     # This takes an ordered list of splice strings and matches
     # them on the basis of how similar they are.  We work 
     # our way down the list trying to match to previous strings
@@ -278,7 +308,7 @@ def create_splice_name_map(splices, flexibility):
         for x in map_to_return.values():
             dedup_splices.add(x)
         
-        print(f"Produced {len(dedup_splices)} deduplicated splices")
+        debug(f"Produced {len(dedup_splices)} deduplicated splices")
     
     return map_to_return
 
@@ -340,8 +370,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                         outfile.write("\t".join([str(x) for x in line_values]))
                         outfile.write("\n")
 
-    if verbose:
-        print(f"Wrote {lines_written} splices to {file}")
+    debug(f"Wrote {lines_written} splices to {file}")
 
 
 def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
@@ -407,8 +436,8 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                            
                             transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
                             
-                            print(f"splice is  {splice}")
-                            print(f"splice info  {splice_info[gene][splice]}")
+                            debug(f"splice is  {splice}")
+                            debug(f"splice info  {splice_info[gene][splice]}")
                             
                             attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
                             
@@ -441,8 +470,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                     report_all_outfile.write("\t".join([str(x) for x in out_line]))
                     report_all_outfile.write("\n")
 
-    if verbose:
-        print(f"Wrote {lines_written} splices to {file}")
+    debug(f"Wrote {lines_written} splices to {file}")
 
 
 def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_coverage, map_threshold):
@@ -468,7 +496,7 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
 
         # Check that we have the sequence for this gene
         if not gene["chrom"] in chromosomes:
-            warnings.warn(f"Skipping {gene['name']} as we don't have sequence for chromosome {gene['chrom']}")
+            warn(f"Skipping {gene['name']} as we don't have sequence for chromosome {gene['chrom']}")
             continue
 
         fasta_file = tempfile.mkstemp(suffix=".fa", dir="/dev/shm")
@@ -488,7 +516,7 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
             # See if we need to print out a progress message
             progress_counter += 1
             if verbose and progress_counter % 100 == 0:
-                print("Processed "+str(progress_counter)+" reads  from "+bam_file)
+                debug("Processed "+str(progress_counter)+" reads  from "+bam_file)
                 ## FOR TESTING ONLY ###
                 #break
 
@@ -515,7 +543,7 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
                     gene_counts[segment_string] += 1
                             
             except Exception as e:
-                print(f"[WARNING] Chexons failed with {e}")
+                warn(f"[WARNING] Chexons failed with {e}")
 
 
         # Clean up the gene sequence file
@@ -594,12 +622,12 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     proportion_mapped = cDNA_length/full_sequence_length
     
     if verbose_proportions:
-        print(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
+        debug(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
 
     # Check that enough of the sequence has been mapped
     if proportion_mapped < map_threshold:
         if verbose_proportions:
-            print(f"Discarding sequence as proportion mapped is too low")
+            debug(f"Discarding sequence as proportion mapped is too low")
         return None
 
     # Check that we've got enough exons to keep this
@@ -674,12 +702,12 @@ def get_reads(gene, bam_file, direction):
 
     elif direction == "opposing":
         strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
-        print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        debug("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
         samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
 
     elif direction == "same":
         strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
-        print("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        debug("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
         samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
 
     else:
@@ -690,11 +718,11 @@ def get_reads(gene, bam_file, direction):
         sections = line.decode("utf8").split("\t")
         
         if (len(sections)<9):
-            print("Only",len(sections),"sections, so exiting")
+            debug(f"Only {len(sections)} sections in {line} from samtools, so exiting")
             break
        # print(sections[3])
         if sections[0] in reads:
-            warnings.warn("Duplicate read name detected "+sections[0])
+            warn(f"Duplicate read name {sections[0]} detected")
             continue
 
         reads[sections[0]] = sections[9]
@@ -708,8 +736,7 @@ def get_reads(gene, bam_file, direction):
 
 def read_fasta(fasta_file):
 
-    if verbose:
-        print(f"Reading sequence from {fasta_file}")
+    debug(f"Reading sequence from {fasta_file}")
 
     chromosomes = {}
 
@@ -725,8 +752,7 @@ def read_fasta(fasta_file):
                         raise Exception(f"Duplicate sequence name {seqname} found in {fasta_file}")
 
                     chromosomes[seqname] = sequence
-                    if verbose:
-                        print(f"Added {seqname} {len(sequence)} bp")
+                    debug(f"Added {seqname} {len(sequence)} bp")
 
                 seqname = line.split(" ")[0][1:]
                 seqname = seqname.rstrip() # Laura - removing new line character in fasta
@@ -739,8 +765,7 @@ def read_fasta(fasta_file):
             raise Exception(f"Duplicate sequence name {seqname} found in {fasta_file}")
 
         chromosomes[seqname] = sequence
-        if verbose:
-            print(f"Added {seqname} {len(sequence)} bp")
+        debug(f"Added {seqname} {len(sequence)} bp")
 
     return chromosomes
         
@@ -750,8 +775,7 @@ def read_fasta(fasta_file):
 
 def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
 
-    if verbose:
-        print(f"Reading exons from {gtf_file}")
+    debug(f"Reading exons from {gtf_file}")
 
     with open(gtf_file) as file:
         for line in file:
@@ -762,7 +786,7 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
             sections = line.split("\t")
 
             if len(sections) < 7:
-                warnings.warn("Not enough data from line "+line)
+                warn(f"Not enough data from line {line} in {gtf_file}")
                 continue
 
             if sections[2] != "exon":
@@ -796,7 +820,7 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
                     transcript_name=comment.strip()[17:].replace('"','').strip()
                     
             if gene_id is None and gene_name is None:
-                warnings.warn(f"No gene name or id found for exon at {chrom}:{start}-{end}")
+                warn(f"No gene name or id found for exon at {chrom}:{start}-{end}")
                 continue
 
             if gene_id is None:
@@ -810,9 +834,8 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
                     continue
             
             if transcript_id is None and transcript_name is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
-                    continue
+                warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
+                continue
 
             if transcript_id is None:
                 transcript_id = transcript_name
@@ -823,7 +846,7 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
             exons = [start, end]
             
             if genes_transcripts[gene_id]["transcripts"][transcript_id] is None:
-                warnings.warn(f"No entry found for transcript {transcript_id} at exon {chrom}:{start}-{end}")
+                warn(f"No entry found for transcript {transcript_id} at exon {chrom}:{start}-{end}")
                 continue
             
             genes_transcripts[gene_id]["transcripts"][transcript_id]["exons"].append(exons)
@@ -832,8 +855,7 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
 
 def read_gtf_transcripts(gtf_file, gene_filter, genes):
 
-    if verbose:
-        print(f"Reading genes and transcripts from {gtf_file}")
+    debug(f"Reading genes and transcripts from {gtf_file}")
 
     genes_transcripts = genes
 
@@ -846,7 +868,7 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
             sections = line.split("\t")
 
             if len(sections) < 7:
-                warnings.warn("Not enough data from line "+line)
+                warn(f"Not enough data from line {line} in {gtf_file}")
                 continue
 
             #if sections[2] != "gene" and sections[2] != "transcript":
@@ -875,18 +897,16 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
                     gene_name=comment.strip()[10:].replace('"','').strip()
 
             if gene_id is None and gene_name is None:
-                warnings.warn(f"No name or id found for gene at {chrom}:{start}-{end}")
+                warn(f"No name or id found for gene at {chrom}:{start}-{end}")
                 continue
 
             if gene_id is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using gene name {gene_name} as ID")
-                    gene_id = gene_name
+                debug(f"Using gene name {gene_name} as ID as ID is missing")
+                gene_id = gene_name
 
             if gene_name is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using gene ID {gene_id} as name")
-                    gene_name = gene_id
+                debug(f"Using gene ID {gene_id} as name as name is missing")
+                gene_name = gene_id
 
             # here we need to check whether gene_name or id is what we're after
             if gene_filter is not None:
@@ -903,18 +923,16 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
                     transcript_name=comment.strip()[17:].replace('"','').strip()
                     
             if transcript_id is None and transcript_name is None:
-                warnings.warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
+                warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
                 continue
 
             if transcript_id is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using transcript name {transcript_name} as ID")
-                    transcript_id = transcript_name
+                debug(f"Using transcript name {transcript_name} as ID as ID is missing")
+                transcript_id = transcript_name
 
             if transcript_name is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using transcript ID {transcript_id} as name")
-                    transcript_name = transcript_id
+                debug(f"Using transcript ID {transcript_id} as name as name is missing")
+                transcript_name = transcript_id
                 
             genes_transcripts[gene_id]["transcripts"][transcript_id] = {
                 "name": transcript_name,
@@ -930,8 +948,7 @@ def read_gtf_transcripts(gtf_file, gene_filter, genes):
 
 def read_gtf_genes(gtf_file, gene_filter):
 
-    if verbose:
-        print(f"Reading genes from {gtf_file}")
+    debug(f"Reading genes from {gtf_file}")
 
     genes = {}
 
@@ -944,7 +961,7 @@ def read_gtf_genes(gtf_file, gene_filter):
             sections = line.split("\t")
 
             if len(sections) < 7:
-                warnings.warn("Not enough data from line "+line)
+                warn(f"Not enough data from line {line} in {gtf_file}")
                 continue
 
             if sections[2] != "gene":
@@ -969,24 +986,22 @@ def read_gtf_genes(gtf_file, gene_filter):
                     gene_name=comment.strip()[10:].replace('"','').strip()
 
             if gene_id is None and gene_name is None:
-                warnings.warn(f"No name or id found for gene at {chrom}:{start}-{end}")
+                warn(f"No name or id found for gene at {chrom}:{start}-{end}")
                 continue
 
             if gene_id is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using gene name {gene_name} as ID")
-                    gene_id = gene_name
+                debug(f"Using gene name {gene_name} as ID as ID is missing")
+                gene_id = gene_name
 
             if gene_name is None:
-                if not suppress_name_warnings:
-                    warnings.warn(f"Using gene ID {gene_id} as name")
-                    gene_name = gene_id
+                debug(f"Using gene ID {gene_id} as name as name is missing")
+                gene_name = gene_id
 
             if gene_filter is not None:
                 if not (gene_name == gene_filter or gene_id == gene_filter) :
                     continue
             
-            print(gene_name, gene_id, chrom, start, end, strand)
+            #print(gene_name, gene_id, chrom, start, end, strand)
             
             genes[gene_id] = {
                 "name":gene_name,
@@ -1130,8 +1145,14 @@ def get_options():
     )
 
     parser.add_argument(
-        "--suppress_name_warnings",
-        help="suppress warnings about lack of names or ids",
+        "--quiet",
+        help="Suppress all messages",
+        action="store_true"
+    )
+
+    parser.add_argument(
+        "--suppress_warnings",
+        help="Suppress warnings (eg about lack of names or ids)",
         action="store_true"
     )
 
