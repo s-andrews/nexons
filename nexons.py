@@ -4,6 +4,7 @@ import tempfile
 import subprocess
 import os
 import sys
+from progressbar import ProgressBar, Percentage, Bar
 
 verbose = False
 quiet = False
@@ -507,18 +508,18 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         gene_counts = {}# this is where we seed the transcripts I think 
         reads = get_reads(gene,bam_file,direction)
 
-        if verbose:
-            print(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
+        debug(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
+
+        pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(reads))
+        if not quiet:
+            pbar.start()
 
         for read_id in reads.keys():
 
             # See if we need to print out a progress message
             progress_counter += 1
-            if verbose and progress_counter % 100 == 0:
-                debug("Processed "+str(progress_counter)+" reads  from "+bam_file)
-                ## FOR TESTING ONLY ###
-                #break
-
+            if not quiet:
+                pbar.update(progress_counter)
             
             # Running chexons will fail if there are no matches between 
             # the read and the gene (or too short to make a match segment)
@@ -544,6 +545,8 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
             except Exception as e:
                 warn(f"[WARNING] Chexons failed with {e}")
 
+        if not quiet:
+            pbar.finish()
 
         # Clean up the gene sequence file
         os.unlink(fasta_file[1])
