@@ -81,7 +81,6 @@ def main():
                 observations += count
 
         log(f"Found {observations} valid splices in {bam_file}")
-        breakpoint()
 
 
     log("Collating splice variants")
@@ -112,7 +111,7 @@ def main():
 
 def log (message):
     if not quiet:
-        print(message, file=sys.stderr)
+        print("LOG:",message, file=sys.stderr)
 
 def warn (message):
     if not suppress_warnings:
@@ -564,7 +563,17 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
 
     # Now we run chexons to get the data
-    chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1]], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    try:
+        chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1]], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    except Exception as ex:
+        # If it's failed we need to clean up anything left behind
+        os.unlink(read_file[1]+".comp")
+        os.unlink(read_file[1]+".dat")
+        os.remove(read_file[1])
+        raise ex
+
+
+
 
     os.unlink(read_file[1]+".comp")
 
