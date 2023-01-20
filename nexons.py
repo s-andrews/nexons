@@ -34,10 +34,10 @@ def main():
             splices = convert_splice_pattern(exon_set)
             genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["splice_patterns"] = splices
      
-    log(f"Found {len(genes.keys())} genes")
+    log(f"Found {len(genes.keys())} genes to quantitate")
     
     if len(genes.keys())==0:
-        raise Exception("No genes to process")
+        raise Exception("No genes found")
 
     log(f"Reading chromosomes from {options.fasta}")
     chromosomes = read_fasta(options.fasta)
@@ -298,6 +298,8 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
 
+    log(f"Writing output to {file} with min count {mincount}")
+
     bam_files = list(data.keys())
  
     with open(file,"w") as outfile:
@@ -356,6 +358,8 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
     # 
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
+
+    log(f"Writing GTF output to {file} with min count {mincount}")
 
     # make a copy so we can get get counts, including 0s.
     # The counts in the original are the number of splices that mapped exactly, not taking into account the flexibility factor.
@@ -487,7 +491,7 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         gene_counts = {}# this is where we seed the transcripts I think 
         reads = get_reads(gene,bam_file,direction)
 
-        debug(f"Got {len(reads)} reads for {gene['name']} from {bam_file}")
+        log(f"Found {len(reads)} for gene {gene_id} in {bam_file}")
 
         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(reads))
         if not options.quiet:
