@@ -460,10 +460,6 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
     # we need a set of splices that are passed in - that need to be in a dictionary of gene_ids as there may be 
     # multiple genes we're looking for.
 
-
-    # Let's keep track of how many reads we've processed
-    progress_counter = 0
-
     # The genes have already been filtered if they're
     # going to be so we can iterate through everything
     for gene_id in genes.keys():
@@ -492,6 +488,9 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         reads = get_reads(gene,bam_file,direction)
 
         log(f"Found {len(reads)} for gene {gene_id} in {bam_file}")
+
+        # Let's keep track of how many reads we've processed
+        progress_counter = 0
 
         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(reads))
         if not options.quiet:
