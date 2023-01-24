@@ -17,14 +17,7 @@ def main():
     # If the gtf was ordered, we could do it in one pass, but safer to do it 3 times - might be slow though...
     log(f"Reading genes from {options.gtf} with gene list {options.gene}")
 
-    genes = read_gtf_genes(options.gtf, options.gene)
-    debug(f"Read details for {len(genes)} genes")
-    
-    genes_transcripts = read_gtf_transcripts(options.gtf, options.gene, genes)
-    debug("Read transcripts")
-    
-    genes_transcripts_exons = read_gtf_exons(options.gtf, options.gene, genes_transcripts)
-    debug("Read exons")
+    genes_transcripts_exons = read_gtf(options.gtf, options.gene)
 
     # now all the exons have been imported from the gtf, we can convert the splice patterns to a compatible format.
     debug("Converting splice patterns")
@@ -34,9 +27,9 @@ def main():
             splices = convert_splice_pattern(exon_set)
             genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["splice_patterns"] = splices
      
-    log(f"Found {len(genes.keys())} genes to quantitate")
+    log(f"Found {len(genes_transcripts_exons.keys())} genes to quantitate")
     
-    if len(genes.keys())==0:
+    if len(genes_transcripts_exons.keys())==0:
         raise Exception("No genes found")
 
     log(f"Reading chromosomes from {options.fasta}")
@@ -51,7 +44,7 @@ def main():
     quantitations = {}
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        quantitations[bam_file] = process_bam_file(genes, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage, options.mapthreshold)
+        quantitations[bam_file] = process_bam_file(genes_transcripts_exons, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage, options.mapthreshold)
  
         observations = 0
         for gene in quantitations[bam_file].keys():
@@ -75,17 +68,17 @@ def main():
             stripped = stripped.replace(".gtf", "")
             gtf_outfile = stripped + ".gtf"
             custom_outfile = stripped + ".txt"            
-            write_gtf_output(quantitations, genes, gtf_outfile, options.mincount, splice_info)
-            write_output(quantitations, genes, custom_outfile, options.mincount, splice_info)
+            write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
+            write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
 
     elif options.gtf_out:
         if options.outfile == "nexons_output.txt":
             outfile = "nexons_output.gtf"
         else:
             outfile = options.outfile
-        write_gtf_output(quantitations, genes, outfile, options.mincount, splice_info)
+        write_gtf_output(quantitations, genes_transcripts_exons, outfile, options.mincount, splice_info)
     else:
-        write_output(quantitations, genes, options.outfile, options.mincount, splice_info)
+        write_output(quantitations, genes_transcripts_exons, options.outfile, options.mincount, splice_info)
 
 def log (message):
     if not options.quiet:
@@ -765,14 +758,15 @@ def read_fasta(fasta_file):
         
         
 
-
-
-def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
-
-    debug(f"Reading exons from {gtf_file}")
+def read_gtf(gtf_file, gene_filter):
+    debug(f"Reading GTF {gtf_file} with genes {gene_filter}")
 
     with open(gtf_file) as file:
+
+        genes = {}
+
         for line in file:
+
             # Skip comments
             if line.startswith("#"):
                 continue
@@ -817,6 +811,11 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
                 warn(f"No gene name or id found for exon at {chrom}:{start}-{end}")
                 continue
 
+            if transcript_id is None and transcript_name is None:
+                warn(f"No transcript name or id found for exon at {chrom}:{start}-{end}")
+                continue
+
+
             if gene_id is None:
                 gene_id = gene_name
 
@@ -839,175 +838,50 @@ def read_gtf_exons(gtf_file, gene_filter, genes_transcripts):
 
             exons = [start, end]
             
-            if genes_transcripts[gene_id]["transcripts"][transcript_id] is None:
-                warn(f"No entry found for transcript {transcript_id} at exon {chrom}:{start}-{end}")
-                continue
-            
-            genes_transcripts[gene_id]["transcripts"][transcript_id]["exons"].append(exons)
-                
-    return genes_transcripts
 
-def read_gtf_transcripts(gtf_file, gene_filter, genes):
+            if gene_id not in genes:
+                genes[gene_id] = {
+                    "name": gene_name,
+                    "id": gene_id,
+                    "chrom": chrom,
+                    "start": start,
+                    "end" : end,
+                    "strand": strand,
+                    "transcripts": {
+                    }
+                }
+            else:
+                if start < genes[gene_id]["start"]:
+                    genes[gene_id]["start"] = start
+                if end < genes[gene_id]["end"]:
+                    genes[gene_id]["end"] = end
 
-    debug(f"Reading genes and transcripts from {gtf_file}")
 
-    genes_transcripts = genes
+            if transcript_id not in genes[gene_id]["transcripts"]:
+                genes[gene_id]["transcripts"][transcript_id] = {
+                    "name": transcript_name,
+                    "id": transcript_id,
+                    "chrom": chrom,
+                    "start": start,
+                    "end": end,
+                    "strand": strand,
+                    "exons" : []
+                }
+            else:
+                if start < genes[gene_id]["transcripts"][transcript_id]["start"]:
+                    genes[gene_id]["transcripts"][transcript_id]["start"] = start
 
-    with open(gtf_file) as file:
-        for line in file:
-            # Skip comments
-            if line.startswith("#"):
-                continue
+                if end > genes[gene_id]["transcripts"][transcript_id]["end"]:
+                    genes[gene_id]["transcripts"][transcript_id]["end"] = end
 
-            sections = line.split("\t")
 
-            if len(sections) < 7:
-                warn(f"Not enough data from line {line} in {gtf_file}")
-                continue
+            genes[gene_id]["transcripts"][transcript_id]["exons"].append([start,end])
 
-            #if sections[2] != "gene" and sections[2] != "transcript":
-             #   continue
-
-            if sections[2] != "transcript":
-                continue
-
-            # we can pull out the main information easily enough
-            chrom = sections[0]
-            start = int(sections[3])
-            end = int(sections[4])
-            strand = sections[6]
-            type = sections[2]
-
-            # For the gene name and gene id we need to delve into the
-            # extended comments
-            comments = sections[8].split(";")
-            gene_id=None
-            gene_name=None
-            for comment in comments:
-                if comment.strip().startswith("gene_id"):
-                    gene_id=comment[8:].replace('"','').strip()
-                
-                if comment.strip().startswith("gene_name"):
-                    gene_name=comment.strip()[10:].replace('"','').strip()
-
-            if gene_id is None and gene_name is None:
-                warn(f"No name or id found for gene at {chrom}:{start}-{end}")
-                continue
-
-            if gene_id is None:
-                debug(f"Using gene name {gene_name} as ID as ID is missing")
-                gene_id = gene_name
-
-            if gene_name is None:
-                debug(f"Using gene ID {gene_id} as name as name is missing")
-                gene_name = gene_id
-
-            # here we need to check whether gene_name or id is what we're after
-            if gene_filter is not None:
-                if not (gene_name == gene_filter or gene_id == gene_filter) :
-                    continue
-                
-            transcript_id=None
-            transcript_name=None
-            for comment in comments:
-                if comment.strip().startswith("transcript_id"):
-                    transcript_id=comment[15:].replace('"','').strip()
-                    
-                if comment.strip().startswith("transcript_name"):
-                    transcript_name=comment.strip()[17:].replace('"','').strip()
-                    
-            if transcript_id is None and transcript_name is None:
-                warn(f"No name or id found for transcript at {chrom}:{start}-{end}")
-                continue
-
-            if transcript_id is None:
-                debug(f"Using transcript name {transcript_name} as ID as ID is missing")
-                transcript_id = transcript_name
-
-            if transcript_name is None:
-                debug(f"Using transcript ID {transcript_id} as name as name is missing")
-                transcript_name = transcript_id
-                
-            genes_transcripts[gene_id]["transcripts"][transcript_id] = {
-                "name": transcript_name,
-                "id": transcript_id,
-                "chrom": chrom,
-                "start": start,
-                "end" : end,
-                "strand" : strand,
-                "exons": []
-            }
-            
-    return genes_transcripts
-
-def read_gtf_genes(gtf_file, gene_filter):
-
-    debug(f"Reading genes from {gtf_file}")
-
-    genes = {}
-
-    with open(gtf_file) as file:
-        for line in file:
-            # Skip comments
-            if line.startswith("#"):
-                continue
-
-            sections = line.split("\t")
-
-            if len(sections) < 7:
-                warn(f"Not enough data from line {line} in {gtf_file}")
-                continue
-
-            if sections[2] != "gene":
-                continue
-
-            # we can pull out the main information easily enough
-            chrom = sections[0]
-            start = int(sections[3])
-            end = int(sections[4])
-            strand = sections[6]
-
-            # For the gene name and gene id we need to delve into the
-            # extended comments
-            comments = sections[8].split(";")
-            gene_id=None
-            gene_name=None
-            for comment in comments:
-                if comment.strip().startswith("gene_id"):
-                    gene_id=comment[8:].replace('"','').strip()
-                
-                if comment.strip().startswith("gene_name"):
-                    gene_name=comment.strip()[10:].replace('"','').strip()
-
-            if gene_id is None and gene_name is None:
-                warn(f"No name or id found for gene at {chrom}:{start}-{end}")
-                continue
-
-            if gene_id is None:
-                debug(f"Using gene name {gene_name} as ID as ID is missing")
-                gene_id = gene_name
-
-            if gene_name is None:
-                debug(f"Using gene ID {gene_id} as name as name is missing")
-                gene_name = gene_id
-
-            if gene_filter is not None:
-                if not (gene_name == gene_filter or gene_id == gene_filter) :
-                    continue
-            
-            #print(gene_name, gene_id, chrom, start, end, strand)
-            
-            genes[gene_id] = {
-                "name":gene_name,
-                "id": gene_id,
-                "chrom": chrom,
-                "start": start,
-                "end" : end,
-                "strand" : strand,
-                "transcripts": {}
-            }
 
     return genes
+
+
+
 
 # To convert the start/stop exon locations to compatible splice pattern,
 # e.g. 20:35-40:55-65:100   
