@@ -48,14 +48,15 @@ def main():
  
         observations = 0
         for gene in quantitations[bam_file].keys():
-            for count in quantitations[bam_file][gene].values():
-                observations += count
+            for countdata in quantitations[bam_file][gene].values():
+                observations += countdata["count"]
 
         log(f"Found {observations} valid splices in {bam_file}")
 
 
     log("Collating splice variants")
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
+    
     quantitations = collated_splices[0]
     splice_info = collated_splices[1]
 
@@ -97,7 +98,7 @@ def debug (message):
 
 def collate_splice_variants(data, flexibility, genes_transcripts_exons):
     # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = count
+    # data[bam_file_name][gene_id][splicing_structure_tuple] = {count:0, start:1, end:2}
     # 
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
@@ -122,14 +123,12 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
 
     # Now work our way through each gene doing the merging
     for gene in genes:
-
-        #unknown_transcript = 0
        
         splice_counts[gene] = {}
        
-       # simplifying the splice counts - genes_transcripts_exons[gene]["transcripts"] contains a load of info for that transcript - a dict of start, stop, exons, splice_patterns (maybe it doesn't need that but we'll leave it for now).
+        # simplifying the splice counts - genes_transcripts_exons[gene]["transcripts"] contains a load of info for that transcript - a dict of start, stop, exons, splice_patterns (maybe it doesn't need that but we'll leave it for now).
        
-       # seed with the transcripts from the gtf file
+        # seed with the transcripts from the gtf file
         for transcript_id in genes_transcripts_exons[gene]["transcripts"]:
 
             # structure is splice_counts[gene][splice_pattern]
@@ -159,7 +158,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
                         "strand": "tbc"
                     }
                     #unknown_transcript += 1               
-                splice_counts[gene][splice]["count"] += data[bam][gene][splice]
+                splice_counts[gene][splice]["count"] += data[bam][gene][splice]["count"]
                 
               #  print(f"splice counts info: {splice_counts[gene][splice]}")
                 
@@ -206,8 +205,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
                 used_splice = splice_name_map[splice]
                 if not used_splice in merged_data[bam][gene]:
                     merged_data[bam][gene][used_splice] = 0
-                
-                merged_data[bam][gene][used_splice] += data[bam][gene][splice]
+                merged_data[bam][gene][used_splice] += data[bam][gene][splice]["count"]
 
     return [merged_data, splice_counts]
 
@@ -215,48 +213,42 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
 
 def create_splice_name_map(splices, flexibility):
     debug(f"Merging {len(splices)} different splice sites")
-    # This takes an ordered list of splice strings and matches
+    # This takes an ordered list of splice tuples and matches
     # them on the basis of how similar they are.  We work 
-    # our way down the list trying to match to previous strings
+    # our way down the list trying to match to previous splices
 
     # This is what we'll give back.  Every string will be in this
     # and we'll match it either to itself or a more popular 
     # equivalent string
 
+
     map_to_return = {}
 
-    # We'll store the good split strings in here so they're easier
-    # to compare to
-    sized_segments = {}
+    # These are the ordered set of patterns which we retained
+    # ie we didn't merge them with another pattern.
+    valid_splice_patterns = []
 
-    for splice in splices:
-        # Split it into segments and then parse the numbers out of these
-        segments = splice.split(":")
-
-        parsed_segments = []
-
-        for segment in segments:
-            parsed_segments.append([int(x) for x in segment.split("-")])
+    for splice_to_test in splices:
 
         # Now we try to map the parsed segment to existing segments
 
-        # If there are no splices with this size then we accept it and
-        # move on
-        if len(parsed_segments) not in sized_segments:
-            sized_segments[len(parsed_segments)] = [{"segments": parsed_segments, "string":splice}]
-            map_to_return[splice] = splice
-            continue
-
-        # We now test the existing parsed segments to see if they're
-        # close enough to this one.
+        # We now test the existing splice patterns to see if they're
+        # a good enough match to this one.
         found_hit = False
-        for test_segment in sized_segments[len(parsed_segments)]:
+
+        # If there aren't the same number of exons then it's defintitely
+        # not a match.
+        for test_segment in valid_splice_patterns:
+            if len(test_segment) != len(splice_to_test):
+                continue
+
+            # Try to match the coordinates of the segments
             too_far = False
             # Iterate though the segments
-            for i in range(len(parsed_segments)):
+            for i in range(len(splice_to_test)):
                 # Iterate through the start/end positions
-                for j in range(len(parsed_segments[i])):
-                    if abs(parsed_segments[i][j]-test_segment["segments"][i][j]) > flexibility:
+                for j in range(len(splice_to_test[i])):
+                    if abs(splice_to_test[i][j]-test_segment[i][j]) > flexibility:
                         too_far = True
                         break
                 if too_far:
@@ -264,21 +256,17 @@ def create_splice_name_map(splices, flexibility):
             if not too_far:
                 # We can use this as a match
                 #print(f"Merged:\n{splice}\ninto\n{test_segment['string']}\n\n")
-                map_to_return[splice] = test_segment["string"]
+                map_to_return[splice_to_test] = test_segment
                 found_hit = True
                 break
         
         if not found_hit:
             # Nothing was close enough, so enter this as a new reference
-            sized_segments[len(parsed_segments)].append({"segments": parsed_segments, "string":splice})
-            map_to_return[splice] = splice
+            map_to_return[splice_to_test] = splice_to_test
+            valid_splice_patterns.append(splice_to_test)
 
-    if options.verbose:
-        dedup_splices = set()
-        for x in map_to_return.values():
-            dedup_splices.add(x)
-        
-        debug(f"Produced {len(dedup_splices)} deduplicated splices")
+    if options.verbose:    
+        debug(f"Produced {len(valid_splice_patterns)} deduplicated splices")
     
     return map_to_return
 
@@ -317,7 +305,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
 
             # Now we can go through the splices for all BAM files
             for splice in splices:
-                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
+                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],str(splice)]
                 line_values.append(splice_info[gene][splice]["transcript_id"])
                 
                 line_above_min = False
@@ -477,13 +465,22 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
         with open(fasta_file[1],"w") as out:
             out.write(f">{gene['name']}\n{sequence}\n")
  
-        gene_counts = {}# this is where we seed the transcripts I think 
+
+        # We're going to keep track of the set of results from chexons.  The 
+        # gene counts data structure has a key of a tuple of the splice boundaries
+        # and a value which is a dict with a count of number of times observed, as
+        # well as lists of the observed start and end positions so we can later
+        # match up transcripts.
+        gene_counts = {}  
         reads = get_reads(gene,bam_file,direction)
 
-        log(f"Found {len(reads)} for gene {gene_id} in {bam_file}")
+        log(f"Found {len(reads)} reads for gene {gene_id} in {bam_file}")
 
         # Let's keep track of how many reads we've processed
         progress_counter = 0
+
+        # Let's count the failures
+        reasons_for_failure = {}
 
         pbar = ProgressBar(widgets=[Percentage(), Bar()], maxval=len(reads))
         if not options.quiet:
@@ -502,26 +499,37 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
             # trigger it
 
             try:
-                segment_string = get_chexons_segment_string(reads[read_id],fasta_file[1],gene, min_exons, min_coverage, map_threshold)
+                chexons_result = get_chexons_segment_string(reads[read_id],fasta_file[1],gene, min_exons, min_coverage, map_threshold)
                 
-                #print("read")
-                #print(reads[read_id])
-                #print("segment_string")
-                #print(segment_string)
                 
-                # This might be None if the transcript didn't pass the filters
-                # we've put in place
-                if segment_string is not None:
-                    if not segment_string in gene_counts:
-                        gene_counts[segment_string] = 0
+                # This will either be a dict with the match details in if it worked
+                # or it will be a string starting with "FAIL" if not.  Yes, I've heard
+                # about exceptions, but this works right now.
+                if type(chexons_result) is dict:
+                    splice_boundaries = chexons_result["splice_boundaries"]
+                    if not splice_boundaries in gene_counts:
+                        gene_counts[splice_boundaries] = {"count": 0, "start":[], "end": []}
                 
-                    gene_counts[segment_string] += 1
+                    gene_counts[splice_boundaries]["count"] += 1
+                    gene_counts[splice_boundaries]["start"].append(chexons_result["start"])
+                    gene_counts[splice_boundaries]["end"].append(chexons_result["end"])
+
+                else:
+                    # It's a failure string
+                    if not chexons_result in reasons_for_failure:
+                        reasons_for_failure[chexons_result] = 0
+                    
+                    reasons_for_failure[chexons_result] += 1
                             
             except Exception as e:
                 warn(f"[WARNING] Chexons failed with {e}")
 
         if not options.quiet:
             pbar.finish()
+
+        log("Reasons for chexons result rejection")
+        for message,count in reasons_for_failure.items():
+            log(f"{count} {message}")
 
         # Clean up the gene sequence file
         os.unlink(fasta_file[1])
@@ -551,8 +559,6 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
         raise ex
 
 
-
-
     os.unlink(read_file[1]+".comp")
 
     count = 0
@@ -564,8 +570,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     with open (read_file[1]+".dat") as dat_file:
         locations = [] 
         for line in dat_file:
-            #print("\nchexons line:")
-            #print(line)
+            #print(line, end=None)
         
             if line.startswith("-"):
                 continue
@@ -609,38 +614,47 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     proportion_mapped = cDNA_length/full_sequence_length
     
     if options.verbose_proportions:
-        debug(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
+        log(f"Proportion of full sequence mapped = {proportion_mapped:.3f}")
 
     # Check that enough of the sequence has been mapped
     if proportion_mapped < map_threshold:
         if options.verbose_proportions:
-            debug(f"Discarding sequence as proportion mapped is too low")
-        return None
-
-    # Check that we've got enough exons to keep this
-    if len(locations) < min_exons:
-        return None
+            log(f"Discarding sequence as proportion mapped is too low {proportion_mapped} vs {map_threshold}")
+        return "FAIL: Transcript coverage too low"
 
     # Check that we've got enough coverage
     if abs(locations[0][0] - locations[-1][-1]) / abs(gene["end"]-gene["start"]) < min_coverage:
-        return None 
+        debug(f"Discarding sequence as coverage of gene was too low {abs(locations[0][0] - locations[-1][-1])} vs {min_coverage}")
+        return "FAIL: Gene coverage too low" 
 
-    pieces_of_text = []
+    # Check that we've got enough exons to keep this
+    if len(locations) < min_exons:
+        debug(f"Discarding sequence as number of exons found {len(locations)} is lower than the threshold {min_exons}")
+        return "FAIL: Not enough exons"
+
+
+    # Our splice boundaries are going to be the locations without the start and end position
+    splice_boundaries = []
 
     for i in range(len(locations)):
         if i==0:
-            pieces_of_text.append(str(locations[i][1]))
+            splice_boundaries.append((locations[i][1],))
         elif i==len(locations)-1:
-            pieces_of_text.append(str(locations[i][0]))
+            splice_boundaries.append((locations[i][0],))
         else:
-            pieces_of_text.append(f"{locations[i][0]}-{locations[i][1]}")
+            splice_boundaries.append((locations[i][0],locations[i][1]))
 
     # Clean up the chexons output
     os.unlink(read_file[1]+".dat")
     os.remove(read_file[1])
 
+    return_data = {
+        "start":locations[0][0],
+        "end": locations[-1][1],
+        "splice_boundaries": tuple(splice_boundaries)
+    }
 
-    return ":".join(pieces_of_text)
+    return return_data
 
 
 
@@ -883,26 +897,23 @@ def read_gtf(gtf_file, gene_filter):
 
 
 
-# To convert the start/stop exon locations to compatible splice pattern,
-# e.g. 20:35-40:55-65:100   
-#def sort_splice_pattern(transcript_dict):
+# To convert the start/stop exon locations to a splice site tuple which looks like
+# ((ex1_end),(ex2_start,ex2_end),(ex3_start))
 def convert_splice_pattern(exon_list):
-    sorted_exons = sorted(exon_list)  
-    #sorted_exons = sorted(transcript_dict["exons"])   
-    flat_list = [str(sorted_exons[0][1])] # we only want the end of the first exon
-    sorted_exons.pop(0)
+    sorted_exons = sorted(exon_list)
+    splice_pattern = []
+    
+    for i,exon in enumerate(sorted_exons):
+        if i==0:
+            splice_pattern.append((exon[1],)) # Just the end of the first exon
 
-    if sorted_exons: # check it's not empty
+        elif i==len(sorted_exons)-1:
+            splice_pattern.append((exon[0],)) # Just the start of the last exon
 
-        last_element = str(sorted_exons.pop()[0]) # only want the start of the last exon
+        else:
+            splice_pattern.append((exon[0],exon[1])) # Both ends of the internal exons
 
-        for exon in sorted_exons:
-            flat_list.append("-".join(map(str, exon)))
-
-        flat_list.append(last_element)
-        
-    splice_pattern = ':'.join(flat_list)   
-    return splice_pattern
+    return tuple(splice_pattern)
 
 
 def get_options():
