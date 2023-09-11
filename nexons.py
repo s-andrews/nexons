@@ -55,6 +55,7 @@ def main():
 
 
     log("Collating splice variants")
+
     collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     
     quantitations = collated_splices[0]
@@ -868,7 +869,7 @@ def read_gtf(gtf_file, gene_filter):
             else:
                 if start < genes[gene_id]["start"]:
                     genes[gene_id]["start"] = start
-                if end < genes[gene_id]["end"]:
+                if end > genes[gene_id]["end"]:
                     genes[gene_id]["end"] = end
 
 
