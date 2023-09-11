@@ -610,6 +610,10 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
             end_cDNA = int(start_end_cDNA[-1])
         cDNA_length = end_cDNA - start_cDNA
     
+    # Clean up the chexons output
+    os.unlink(read_file[1]+".dat")
+    os.remove(read_file[1])
+
     #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
     proportion_mapped = cDNA_length/full_sequence_length
     
@@ -644,9 +648,6 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
         else:
             splice_boundaries.append((locations[i][0],locations[i][1]))
 
-    # Clean up the chexons output
-    os.unlink(read_file[1]+".dat")
-    os.remove(read_file[1])
 
     return_data = {
         "start":locations[0][0],
