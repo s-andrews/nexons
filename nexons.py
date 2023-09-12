@@ -5,8 +5,11 @@ import subprocess
 import os
 import sys
 from progressbar import ProgressBar, Percentage, Bar
+import pickle
 
 VERSION = "0.1.devel"
+
+options = argparse.Namespace(verbose=False, quiet=True)
 
 def main():
     global options
@@ -52,6 +55,12 @@ def main():
                 observations += countdata["count"]
 
         log(f"Found {observations} valid splices in {bam_file}")
+
+    with open("quantitations.pkl","wb") as out:
+        pickle.dump(quantitations,out)
+
+    with open("genes.pkl","wb") as out:
+        pickle.dump(genes_transcripts_exons,out)
 
 
     log("Collating splice variants")
@@ -205,8 +214,10 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
             for splice in these_splices:
                 used_splice = splice_name_map[splice]
                 if not used_splice in merged_data[bam][gene]:
-                    merged_data[bam][gene][used_splice] = 0
-                merged_data[bam][gene][used_splice] += data[bam][gene][splice]["count"]
+                    merged_data[bam][gene][used_splice] = {"count":0, "start":[], "end":[]}
+                merged_data[bam][gene][used_splice]["count"] += data[bam][gene][splice]["count"]
+                merged_data[bam][gene][used_splice]["start"].extend(data[bam][gene][splice]["start"])
+                merged_data[bam][gene][used_splice]["end"].extend(data[bam][gene][splice]["end"])
 
     return [merged_data, splice_counts]
 
