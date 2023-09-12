@@ -76,8 +76,8 @@ def main():
             stripped = stripped.replace(".gtf", "")
             gtf_outfile = stripped + ".gtf"
             custom_outfile = stripped + ".txt"            
-            write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
-            write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
+        write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
+        write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
 
     elif options.gtf_out:
         if options.outfile == "nexons_output.txt":
