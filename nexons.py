@@ -12,6 +12,7 @@ VERSION = "0.1.devel"
 options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
 def main():
+    global options
     options = get_options()
     
     # Read the details from the GTF for the requested genes
