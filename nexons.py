@@ -5,11 +5,13 @@ import subprocess
 import os
 import sys
 from progressbar import ProgressBar, Percentage, Bar
+import pickle
 
 VERSION = "0.1.devel"
 
+options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
+
 def main():
-    global options
     options = get_options()
     
     # Read the details from the GTF for the requested genes
@@ -53,13 +55,17 @@ def main():
 
         log(f"Found {observations} valid splices in {bam_file}")
 
+    with open("quantitations.pkl","wb") as out:
+        pickle.dump(quantitations,out)
+
+    with open("genes.pkl","wb") as out:
+        pickle.dump(genes_transcripts_exons,out)
+
 
     log("Collating splice variants")
-    collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
-    
-    quantitations = collated_splices[0]
-    splice_info = collated_splices[1]
 
+    quantiations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
+    
     if options.both_out:
         if options.outfile == "nexons_output.txt":
             gtf_outfile = "nexons_output.gtf"
@@ -69,8 +75,8 @@ def main():
             stripped = stripped.replace(".gtf", "")
             gtf_outfile = stripped + ".gtf"
             custom_outfile = stripped + ".txt"            
-            write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
-            write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
+        write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
+        write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
 
     elif options.gtf_out:
         if options.outfile == "nexons_output.txt":
@@ -204,8 +210,17 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
             for splice in these_splices:
                 used_splice = splice_name_map[splice]
                 if not used_splice in merged_data[bam][gene]:
-                    merged_data[bam][gene][used_splice] = 0
-                merged_data[bam][gene][used_splice] += data[bam][gene][splice]["count"]
+                    merged_data[bam][gene][used_splice] = {"count":0, "start":[], "end":[]}
+                merged_data[bam][gene][used_splice]["count"] += data[bam][gene][splice]["count"]
+                merged_data[bam][gene][used_splice]["start"].extend(data[bam][gene][splice]["start"])
+                merged_data[bam][gene][used_splice]["end"].extend(data[bam][gene][splice]["end"])
+
+    # We should also sort the start and end lists
+    for bam in merged_data.keys():
+        for gene in merged_data[bam].keys():
+            for splice in merged_data[bam][gene].keys():
+                merged_data[bam][gene][splice]["start"].sort()
+                merged_data[bam][gene][splice]["end"].sort()
 
     return [merged_data, splice_counts]
 
@@ -274,7 +289,7 @@ def create_splice_name_map(splices, flexibility):
 
 def write_output(data, gene_annotations, file, mincount, splice_info):
     # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = count
+    # data[bam_file_name][gene_id][splicing_structure] = {"count":0, "start":[1,2,3], "end":[4,5,6]}
     # 
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
@@ -285,8 +300,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
  
     with open(file,"w") as outfile:
         # Write the header
-        header = ["Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id"]
-        header.extend(bam_files)
+        header = ["File","Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id","Count","Starts","Ends"]
         outfile.write("\t".join(header))
         outfile.write("\n")
 
@@ -295,42 +309,52 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
         lines_written = 0
 
         for gene in genes:
-            splices = set() 
+            # We'll make a list of the splices across all samples, and will track the 
+            # highest observed value so we can kick out splices which are very 
+            # infrequently observed in the whole set.
+
+            splices = {} 
 
             for bam in bam_files:
                 these_splices = data[bam][gene].keys()
 
                 for splice in these_splices:
-                    splices.add(splice)
+                    if not splice in splices:
+                        splices[splice] = 0
+
+                    if data[bam][gene][splice]["count"] > splices[splice]:
+                        splices[splice] = data[bam][gene][splice]["count"]
+
+            # Now extract the subset which pass the filter as we'll report on 
+            # all of these
+
+            passed_splices = []
+
+            for splice in splices.keys():
+                if splices[splice] >= mincount or options.report_all:
+                    passed_splices.append(splice)
 
             # Now we can go through the splices for all BAM files
-            for splice in splices:
-                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],str(splice)]
-                line_values.append(splice_info[gene][splice]["transcript_id"])
-                
-                line_above_min = False
-                for bam in bam_files:
-                    #print(f"data[bam][gene] = {data[bam][gene]}")
-                    if splice in data[bam][gene]:
-                        
-                        line_values.append(data[bam][gene][splice]) # adding the count
-                        if data[bam][gene][splice] >= mincount:
-                            line_above_min = True
-                    
-                    else:
-                        line_values.append(0)
-                
-                if options.report_all:
-                    lines_written += 1
-                    outfile.write("\t".join([str(x) for x in line_values]))
-                    outfile.write("\n")
-                else:                
-                    if line_above_min:
-                        lines_written += 1
-                        outfile.write("\t".join([str(x) for x in line_values]))
-                        outfile.write("\n")
+            for splice in passed_splices:
+                line_values = [
+                    gene,
+                    gene_annotations[gene]["name"],
+                    gene_annotations[gene]["chrom"],
+                    gene_annotations[gene]["strand"],
+                    str(splice),
+                    splice_info[gene][splice]["transcript_id"]
+                ]
 
-    debug(f"Wrote {lines_written} splices to {file}")
+                for bam in bam_files:
+                    if splice in data[bam][gene]:
+                        splice_line = [
+                            str(data[bam][gene][splice]["count"]),
+                            ",".join([str(x) for x in data[bam][gene][splice]["start"]]),
+                            ",".join([str(x) for x in data[bam][gene][splice]["end"]])
+                        ]
+                        print("\t".join(line_values+splice_line), file=outfile)
+                
+    debug(f"Wrote {len(passed_splices)} splices to {file}")
 
 
 def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
@@ -610,6 +634,10 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
             end_cDNA = int(start_end_cDNA[-1])
         cDNA_length = end_cDNA - start_cDNA
     
+    # Clean up the chexons output
+    os.unlink(read_file[1]+".dat")
+    os.remove(read_file[1])
+
     #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
     proportion_mapped = cDNA_length/full_sequence_length
     
@@ -644,9 +672,6 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
         else:
             splice_boundaries.append((locations[i][0],locations[i][1]))
 
-    # Clean up the chexons output
-    os.unlink(read_file[1]+".dat")
-    os.remove(read_file[1])
 
     return_data = {
         "start":locations[0][0],
@@ -867,7 +892,7 @@ def read_gtf(gtf_file, gene_filter):
             else:
                 if start < genes[gene_id]["start"]:
                     genes[gene_id]["start"] = start
-                if end < genes[gene_id]["end"]:
+                if end > genes[gene_id]["end"]:
                     genes[gene_id]["end"] = end
 
 
