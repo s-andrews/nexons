@@ -9,10 +9,9 @@ import pickle
 
 VERSION = "0.1.devel"
 
-options = argparse.Namespace(verbose=False, quiet=True)
+options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
 def main():
-    global options
     options = get_options()
     
     # Read the details from the GTF for the requested genes
@@ -290,7 +289,7 @@ def create_splice_name_map(splices, flexibility):
 
 def write_output(data, gene_annotations, file, mincount, splice_info):
     # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = count
+    # data[bam_file_name][gene_id][splicing_structure] = {"count":0, "start":[1,2,3], "end":[4,5,6]}
     # 
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
@@ -301,8 +300,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
  
     with open(file,"w") as outfile:
         # Write the header
-        header = ["Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id"]
-        header.extend(bam_files)
+        header = ["File","Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id","Count","Starts","Ends"]
         outfile.write("\t".join(header))
         outfile.write("\n")
 
@@ -311,42 +309,52 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
         lines_written = 0
 
         for gene in genes:
-            splices = set() 
+            # We'll make a list of the splices across all samples, and will track the 
+            # highest observed value so we can kick out splices which are very 
+            # infrequently observed in the whole set.
+
+            splices = {} 
 
             for bam in bam_files:
                 these_splices = data[bam][gene].keys()
 
                 for splice in these_splices:
-                    splices.add(splice)
+                    if not splice in splices:
+                        splices[splice] = 0
+
+                    if data[bam][gene][splice]["count"] > splices[splice]:
+                        splices[splice] = data[bam][gene][splice]["count"]
+
+            # Now extract the subset which pass the filter as we'll report on 
+            # all of these
+
+            passed_splices = []
+
+            for splice in splices.keys():
+                if splices[splice] >= mincount or options.report_all:
+                    passed_splices.append(splice)
 
             # Now we can go through the splices for all BAM files
-            for splice in splices:
-                line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],str(splice)]
-                line_values.append(splice_info[gene][splice]["transcript_id"])
-                
-                line_above_min = False
-                for bam in bam_files:
-                    #print(f"data[bam][gene] = {data[bam][gene]}")
-                    if splice in data[bam][gene]:
-                        
-                        line_values.append(data[bam][gene][splice]) # adding the count
-                        if data[bam][gene][splice] >= mincount:
-                            line_above_min = True
-                    
-                    else:
-                        line_values.append(0)
-                
-                if options.report_all:
-                    lines_written += 1
-                    outfile.write("\t".join([str(x) for x in line_values]))
-                    outfile.write("\n")
-                else:                
-                    if line_above_min:
-                        lines_written += 1
-                        outfile.write("\t".join([str(x) for x in line_values]))
-                        outfile.write("\n")
+            for splice in passed_splices:
+                line_values = [
+                    gene,
+                    gene_annotations[gene]["name"],
+                    gene_annotations[gene]["chrom"],
+                    gene_annotations[gene]["strand"],
+                    str(splice),
+                    splice_info[gene][splice]["transcript_id"]
+                ]
 
-    debug(f"Wrote {lines_written} splices to {file}")
+                for bam in bam_files:
+                    if splice in data[bam][gene]:
+                        splice_line = [
+                            str(data[bam][gene][splice]["count"]),
+                            ",".join([str(x) for x in data[bam][gene][splice]["start"]]),
+                            ",".join([str(x) for x in data[bam][gene][splice]["end"]])
+                        ]
+                        print("\t".join(line_values+splice_line), file=outfile)
+                
+    debug(f"Wrote {len(passed_splices)} splices to {file}")
 
 
 def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
