@@ -65,11 +65,8 @@ def main():
 
     log("Collating splice variants")
 
-    collated_splices = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
+    quantiations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     
-    quantitations = collated_splices[0]
-    splice_info = collated_splices[1]
-
     if options.both_out:
         if options.outfile == "nexons_output.txt":
             gtf_outfile = "nexons_output.gtf"
