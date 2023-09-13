@@ -353,7 +353,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                             ",".join([str(x) for x in data[bam][gene][splice]["start"]]),
                             ",".join([str(x) for x in data[bam][gene][splice]["end"]])
                         ]
-                        print("\t".join(line_values+splice_line), file=outfile)
+                        print("\t".join([bam]+line_values+splice_line), file=outfile)
                 
     debug(f"Wrote {len(passed_splices)} splices to {file}")
 
