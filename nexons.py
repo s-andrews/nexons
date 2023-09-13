@@ -56,13 +56,6 @@ def main():
 
         log(f"Found {observations} valid splices in {bam_file}")
 
-    with open("quantitations.pkl","wb") as out:
-        pickle.dump(quantitations,out)
-
-    with open("genes.pkl","wb") as out:
-        pickle.dump(genes_transcripts_exons,out)
-
-
     log("Collating splice variants")
 
     quantiations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
@@ -360,7 +353,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
 
 def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
     # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = count
+    # data[bam_file_name][gene_id][splicing_structure] = {count:0, start:[1,2,3], end:[4,5,6]}
     # 
     # We will have all genes in all BAM files, but might
     # not have all splice forms in all BAM files
