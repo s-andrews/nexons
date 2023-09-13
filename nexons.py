@@ -209,12 +209,6 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
                 merged_data[bam][gene][used_splice]["start"].extend(data[bam][gene][splice]["start"])
                 merged_data[bam][gene][used_splice]["end"].extend(data[bam][gene][splice]["end"])
 
-    # We should also sort the start and end lists
-    for bam in merged_data.keys():
-        for gene in merged_data[bam].keys():
-            for splice in merged_data[bam][gene].keys():
-                merged_data[bam][gene][splice]["start"].sort()
-                merged_data[bam][gene][splice]["end"].sort()
 
     return [merged_data, splice_counts]
 
