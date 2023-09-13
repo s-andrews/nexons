@@ -58,7 +58,7 @@ def main():
 
     log("Collating splice variants")
 
-    quantiations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
+    quantitations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
     
     if options.both_out:
         if options.outfile == "nexons_output.txt":
@@ -360,8 +360,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
 
     log(f"Writing GTF output to {file} with min count {mincount}")
 
-    # make a copy so we can get get counts, including 0s.
-    # The counts in the original are the number of splices that mapped exactly, not taking into account the flexibility factor.
+    # This copy will be the sum of counts across all samples.
     splice_info_copy = splice_info.copy()
     # set all counts to 0
     for gene in splice_info_copy:
@@ -421,7 +420,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                             
                             attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
                             
-                            line_values[5] += data[bam][gene][splice]  # adding the count
+                            line_values[5] += data[bam][gene][splice]["count"]  # adding the count
                             # if we've got multiple bam files, we want to add up the counts but not keep adding ie. repeating the attribute info.
                             if(len(line_values) == 8):
                             
@@ -431,7 +430,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                                 line_above_min = True
                                 
                             # set the count in the splice copy dict
-                            splice_info_copy[gene][splice]["merged_count"] += data[bam][gene][splice]
+                            splice_info_copy[gene][splice]["merged_count"] += data[bam][gene][splice]["count"]
       
                     if line_above_min:
                         lines_written += 1
