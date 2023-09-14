@@ -1,2 +1,3 @@
 test_data/*
 nexons_output.txt
+__pycache__
