@@ -397,9 +397,8 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                 # Now we can go through the splices for all BAM files
                 for splice in splices:
                     #line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
-                    splice_split = splice.split(":")
-                    splice_start = splice_split[0]
-                    splice_end = splice_split.pop()
+                    splice_start = splice[0][0]
+                    splice_end = splice[-1][0]
 
                     line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
 
@@ -422,7 +421,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
                             
                                 line_values.append(attribute_field)
 
-                            if data[bam][gene][splice] >= mincount:
+                            if data[bam][gene][splice]["count"] >= mincount:
                                 line_above_min = True
                                 
                             # set the count in the splice copy dict
@@ -437,9 +436,8 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
 
                 splice_info_splices = splice_info_copy[gene].keys()
                 for splice_info_splice in splice_info_splices: 
-                    splice_is_split = splice_info_splice.split(":")
-                    splice_is_start = splice_is_split[0]
-                    splice_is_end = splice_is_split.pop()
+                    splice_is_start = splice_info_splice[0][0]
+                    splice_is_end = splice_info_splice[-1][0]
                     other_info = splice_info_copy[gene][splice_info_splice]
                     out_line = [gene, "nexons", "transcript", splice_is_start, splice_is_end, other_info["transcript_id"], other_info["count"], other_info["merged_count"], splice_info_splice]
                     report_all_outfile.write("\t".join([str(x) for x in out_line]))
