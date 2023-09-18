@@ -331,7 +331,7 @@ def write_output(data, gene_annotations, file, mincount, splice_info):
                     gene_annotations[gene]["name"],
                     gene_annotations[gene]["chrom"],
                     gene_annotations[gene]["strand"],
-                    str(splice),
+                    ":".join("-".join(str(coord) for coord in junction) for junction in splice),
                     splice_info[gene][splice]["transcript_id"]
                 ]
 
@@ -402,7 +402,7 @@ def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
 
                     line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
 
-                    splice_text = "splicePattern " + splice
+                    splice_text = "splicePattern " + ":".join("-".join(str(coord) for coord in junction) for junction in splice)
 
                     line_above_min = False
                     for bam in bam_files:
