@@ -566,7 +566,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
     # Now we run chexons to get the data
     try:
-        chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1]], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1],"--mismatch",options.mismatch,"--splice",options.splice,"--gapopen",options.gapopen], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     except Exception as ex:
         # If it's failed we need to clean up anything left behind
         os.unlink(read_file[1]+".comp")
@@ -1057,6 +1057,25 @@ def get_options():
         help="Print version and exit",
         action="version",
         version=f"Nexons version {VERSION}"
+    )
+
+    parser.add_argument(
+        "--mismatch",
+        default="10",
+        type=str
+    )
+    
+
+    parser.add_argument(
+        "--gapopen",
+        default="15",
+        type=str
+    )
+    
+    parser.add_argument(
+        "--splice",
+        default="140",
+        type=str
     )
 
     return(parser.parse_args())
