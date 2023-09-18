@@ -5,7 +5,7 @@ import subprocess
 import os
 import sys
 from progressbar import ProgressBar, Percentage, Bar
-import pickle
+from pathlib import Path
 
 VERSION = "0.1.devel"
 
@@ -59,6 +59,11 @@ def main():
     log("Collating splice variants")
 
     quantitations, splice_info = collate_splice_variants(quantitations,options.flexibility, genes_transcripts_exons)
+
+    #This creates an output directory when it doesn't exist
+    outfile_path=Path(options.outfile)
+    outfile_path.parent.mkdir(parents=True, exist_ok=True)
+    
     
     if options.both_out:
         if options.outfile == "nexons_output.txt":
