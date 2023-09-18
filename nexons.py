@@ -715,12 +715,12 @@ def get_reads(gene, bam_file, direction):
 
     elif direction == "opposing":
         strand_filter_string = "-f" if gene["strand"] == "+" else "-F"
-        debug("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        debug(f"Launching samtools with samtools view {bam_file} -L {bed_file[1]} {strand_filter_string} 16")
         samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
 
     elif direction == "same":
         strand_filter_string = "-F" if gene["strand"] == "+" else "-f"
-        debug("Launching samtools with","samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16")
+        debug(f"Launching samtools with samtools view {bam_file} -L {bed_file[1]} {strand_filter_string} 16")
         samtools_process = subprocess.Popen(["samtools","view",bam_file,"-L",bed_file[1],strand_filter_string,"16"], stdout=subprocess.PIPE)
 
     else:
