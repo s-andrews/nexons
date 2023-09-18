@@ -123,7 +123,9 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
 
     # Now work our way through each gene doing the merging
     for gene in genes:
-       
+
+        unknown_transcript = 1
+
         splice_counts[gene] = {}
        
         # simplifying the splice counts - genes_transcripts_exons[gene]["transcripts"] contains a load of info for that transcript - a dict of start, stop, exons, splice_patterns (maybe it doesn't need that but we'll leave it for now).
@@ -153,11 +155,11 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
                 
                 if not splice in splice_counts[gene].keys():
                     splice_counts[gene][splice] = {
-                        "transcript_id": "unknown",#_transcript,
+                        "transcript_id": "Variant"+str(unknown_transcript),
                         "count": 0,
                         "strand": "tbc"
                     }
-                    #unknown_transcript += 1               
+                    unknown_transcript += 1               
                 splice_counts[gene][splice]["count"] += data[bam][gene][splice]["count"]
                 
               #  print(f"splice counts info: {splice_counts[gene][splice]}")
@@ -167,7 +169,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
         novel_splices = {}
         
         for splice in splice_counts[gene].keys():
-            if splice_counts[gene][splice]["transcript_id"] == "unknown":
+            if splice_counts[gene][splice]["transcript_id"][0-3] == "Var":
                 novel_splices[splice] = splice_counts[gene][splice]["count"]
             else:
                 known_splices[splice] = splice_counts[gene][splice]["count"]
