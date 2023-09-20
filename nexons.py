@@ -27,7 +27,7 @@ def main():
     for gene_id in genes_transcripts_exons:
         for transcript_id in genes_transcripts_exons[gene_id]["transcripts"]:
             exon_set = genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["exons"]
-            splices = convert_splice_pattern(exon_set)
+            splices = convert_splice_pattern(exon_set, genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["strand"])
             genes_transcripts_exons[gene_id]["transcripts"][transcript_id]["splice_patterns"] = splices
      
     log(f"Found {len(genes_transcripts_exons.keys())} genes to quantitate")
@@ -554,6 +554,8 @@ def process_bam_file(genes, chromosomes, bam_file, direction, min_exons, min_cov
 
     return counts
 
+
+
 def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_coverage, map_threshold):
 
     position_offset = gene["start"]
@@ -673,6 +675,14 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
     return return_data
 
+def rev_comp_seq(seq):
+    seq=seq.replace("A", "t"). replace("C","g").replace("T","a").replace("G","c") ###complement strand
+    seq=seq.upper()
+
+    #Reverse strand=
+    seq = seq[::-1]
+    
+    return seq
 
 
 def get_reads(gene, bam_file, direction):
@@ -743,7 +753,11 @@ def get_reads(gene, bam_file, direction):
             warn(f"Duplicate read name {sections[0]} detected")
             continue
 
-        reads[sections[0]] = sections[9]
+        if gene["transcripts"][list(gene["transcripts"].keys())[0]]["strand"]=="+":
+            reads[sections[0]]=sections[9]
+        else:
+            reads[sections[0]]=rev_comp_seq(sections[9])
+    
     
     # Clean up the bed file
     os.unlink(bed_file[1])
@@ -916,8 +930,13 @@ def read_gtf(gtf_file, gene_filter):
 
 # To convert the start/stop exon locations to a splice site tuple which looks like
 # ((ex1_end),(ex2_start,ex2_end),(ex3_start))
-def convert_splice_pattern(exon_list):
-    sorted_exons = sorted(exon_list)
+def convert_splice_pattern(exon_list, strand):
+
+    if strand == "+":
+        sorted_exons = sorted(exon_list)
+    else:
+        sorted_exons= sorted(exon_list, reverse=True)
+
     splice_pattern = []
     
     for i,exon in enumerate(sorted_exons):
