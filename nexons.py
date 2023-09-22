@@ -631,10 +631,9 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     # Clean up the chexons output
     os.unlink(read_file[1]+".dat")
     os.remove(read_file[1])
-    ################
-    print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
-    print(locations)
-    ###################
+
+    #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
+
     proportion_mapped = cDNA_length/full_sequence_length
     
     if options.verbose_proportions:
