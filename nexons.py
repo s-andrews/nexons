@@ -174,7 +174,7 @@ def collate_splice_variants(data, flexibility, genes_transcripts_exons):
         novel_splices = {}
         
         for splice in splice_counts[gene].keys():
-            if splice_counts[gene][splice]["transcript_id"][0-3] == "Var":
+            if splice_counts[gene][splice]["transcript_id"][0:3] == "Var":
                 novel_splices[splice] = splice_counts[gene][splice]["count"]
             else:
                 known_splices[splice] = splice_counts[gene][splice]["count"]
