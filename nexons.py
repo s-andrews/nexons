@@ -631,8 +631,10 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     # Clean up the chexons output
     os.unlink(read_file[1]+".dat")
     os.remove(read_file[1])
-
-    #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
+    ################
+    print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
+    print(locations)
+    ###################
     proportion_mapped = cDNA_length/full_sequence_length
     
     if options.verbose_proportions:
@@ -753,7 +755,7 @@ def get_reads(gene, bam_file, direction):
             warn(f"Duplicate read name {sections[0]} detected")
             continue
 
-        if gene["transcripts"][list(gene["transcripts"].keys())[0]]["strand"]=="+":
+        if gene["strand"]=="+":
             reads[sections[0]]=sections[9]
         else:
             reads[sections[0]]=rev_comp_seq(sections[9])
@@ -935,7 +937,7 @@ def convert_splice_pattern(exon_list, strand):
     if strand == "+":
         sorted_exons = sorted(exon_list)
     else:
-        sorted_exons= sorted(exon_list, reverse=True)
+        sorted_exons = sorted([sorted(exon_pair, reverse=True) for exon_pair in exon_list], reverse=True)
 
     splice_pattern = []
     
