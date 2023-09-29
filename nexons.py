@@ -568,7 +568,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
     # Now we run chexons to get the data
     try:
-        chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1],"--mismatch",options.mismatch,"--splice",options.splice,"--gapopen",options.gapopen], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        chexons_process = subprocess.run(["chexons",read_file[1],genomic_file,"--basename",read_file[1],"--match",options.match,"--splicemis",options.splicemis,"--mismatch",options.mismatch,"--splice",options.splice,"--gapopen",options.gapopen], check=True, stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
     except Exception as ex:
         # If it's failed we need to clean up anything left behind
         os.unlink(read_file[1]+".comp")
@@ -584,6 +584,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     end_cDNA = 0
     cDNA_length = 0
     full_sequence_length = len(sequence)
+    splice_back_index = 0
 
     with open (read_file[1]+".dat") as dat_file:
         locations = [] 
@@ -622,6 +623,14 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
             start = int(start_end[0])+position_offset-1
             end = int(start_end[-1])+position_offset-1
 
+            if count > 1 and splice_back_index == 0: # only log first time it goes backwards so we can distinguish when it is only the final junction
+                if gene["strand"] == "+":
+                    if start < locations[-1][1]:
+                        splice_back_index = count
+                else:
+                    if start > locations[-1][1]:
+                        splice_back_index = count
+
             locations.append([start,end])
         
             start_end_cDNA = sections[1].strip().split(" ")           
@@ -654,6 +663,15 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     if len(locations) < min_exons:
         debug(f"Discarding sequence as number of exons found {len(locations)} is lower than the threshold {min_exons}")
         return "FAIL: Not enough exons"
+
+    # Check the splice junctions don't jump backwards
+    if splice_back_index ==len(locations):
+        debug(f"Discarding sequence as reverse splicing detected (final junction only)")
+        return "FAIL: Reverse splicing (final junction)"
+    
+    if splice_back_index > 0: # should only evaluate if it hasn't already failed
+        debug(f"Discarding sequence as reverse splicing detected (junction {splice_back_index})")
+        return "FAIL: Reverse splicing (middle junction)"
 
 
     # Our splice boundaries are going to be the locations without the start and end position
@@ -1078,6 +1096,20 @@ def get_options():
         action="version",
         version=f"Nexons version {VERSION}"
     )
+
+    parser.add_argument(
+        "--splicemis",
+        default="300",
+        type=str
+    )
+
+
+    parser.add_argument(
+        "--match",
+        default="14",
+        type=str
+    )
+
 
     parser.add_argument(
         "--mismatch",
