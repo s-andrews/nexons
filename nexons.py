@@ -585,6 +585,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     cDNA_length = 0
     full_sequence_length = len(sequence)
     splice_back_index = 0
+    splice_back_first = False
 
     with open (read_file[1]+".dat") as dat_file:
         locations = [] 
@@ -623,7 +624,15 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
             start = int(start_end[0])+position_offset-1
             end = int(start_end[-1])+position_offset-1
 
-            if count > 1 and splice_back_index == 0: # only log first time it goes backwards so we can distinguish when it is only the final junction
+            if count == 2:
+                if gene["strand"] == "+":
+                    if start < locations[-1][1]:
+                        splice_back_first = True
+                else:
+                    if start > locations[-1][1]:
+                        splice_back_first = True
+
+            if count > 2 and splice_back_index == 0: # only log first time it goes backwards so we can distinguish when it is only the final junction
                 if gene["strand"] == "+":
                     if start < locations[-1][1]:
                         splice_back_index = count
@@ -665,9 +674,18 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
         return "FAIL: Not enough exons"
 
     # Check the splice junctions don't jump backwards
+    if splice_back_index ==len(locations) and splice_back_first == True:
+        debug(f"Discarding sequence as reverse splicing detected (first and last junctions)")
+        return "FAIL: Reverse splicing (first and last junction)"
+
     if splice_back_index ==len(locations):
         debug(f"Discarding sequence as reverse splicing detected (final junction only)")
         return "FAIL: Reverse splicing (final junction)"
+
+    if splice_back_first == True and splice_back_index == 0:
+        debug(f"Discarding sequence as reverse splicing detected (first junction only)")
+        return "FAIL: Reverse splicing (first junction)"
+
     
     if splice_back_index > 0: # should only evaluate if it hasn't already failed
         debug(f"Discarding sequence as reverse splicing detected (junction {splice_back_index})")
