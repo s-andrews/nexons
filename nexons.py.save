@@ -43,18 +43,11 @@ def main():
     if len(chromosomes.keys())==0:
         raise Exception("No chromosomes found")
 
-    # check that options.minexons is > 0
-    if options.minexons < 1:
-        min_exons = 1
-        warn(f"minexons (provided value: {options.minexons}) cannot be less than 1: setting to 1")
-    else:
-        min_exons = options.minexons
-
     # Process each of the BAM files and add their data to the quantitations
     quantitations = {}
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        quantitations[bam_file] = process_bam_file(genes_transcripts_exons, chromosomes, bam_file, options.direction, min_exons, options.mincoverage, options.mapthreshold)
+        quantitations[bam_file] = process_bam_file(genes_transcripts_exons, chromosomes, bam_file, options.direction, options.minexons, options.mincoverage, options.mapthreshold)
  
         observations = 0
         for gene in quantitations[bam_file].keys():
@@ -592,7 +585,7 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     cDNA_length = 0
     full_sequence_length = len(sequence)
     reverse_exon_index = 0
-    reverse_exon_first = False
+    reverse_exon_first = False # these will pick up either splicing backwards or an exon mapping to reverse strand
 
     with open (read_file[1]+".dat") as dat_file:
         locations = [] 
@@ -628,6 +621,8 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
             end = int(start_end[-1])+position_offset-1
 
             if count == 1:
+                start_end_cDNA = sections[1].strip().split(" ")
+                start_cDNA = int(start_end_cDNA[0])
                 if gene["strand"] == "+":
                     if start > end:
                         reverse_exon_first = True
@@ -640,15 +635,14 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
                     if start < locations[-1][1]:
                         reverse_exon_first = True
                     if start > end:
-                        reverse_exon_index = count
+                        reverse_exon_index = Count
                 else:
                     if start > locations[-1][1]:
                         reverse_exon_first = True
                     if start < end:
-                        reverse_exon_index = count
+                        reverse_exon_index = Count
 
-
-            if count > 2 and reverse_exon_index == 0: # only log first time it goes backwards so we can distinguish when it is only the final junction
+            if count > 2 and splice_back_index == 0: # only log first time it goes backwards so we can distinguish when it is only the final junction
                 if gene["strand"] == "+":
                     if start < locations[-1][1] or start > end:
                         reverse_exon_index = count
@@ -658,39 +652,36 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
 
             locations.append([start,end])
         
-            start_end_cDNA = sections[1].strip().split(" ")
-            if count == 1 or (count == 2 and reverse_exon_first == True): # if first exon will be removed, replace start_cDNA
-                start_cDNA = int(start_end_cDNA[0])
-            if not reverse_exon_index == count: # if final coordinates removed, this will prevent end_cDNA being updated for those coordinates
-                end_cDNA = int(start_end_cDNA[-1])
+            start_end_cDNA = sections[1].strip().split(" ")           
+            end_cDNA = int(start_end_cDNA[-1])
         cDNA_length = end_cDNA - start_cDNA
     
     # Clean up the chexons output
     os.unlink(read_file[1]+".dat")
     os.remove(read_file[1])
 
-    # Check the splice junctions don't jump backwards
-    # need to do this BEFORE checking coverage and number of exons
-    if reverse_exon_index ==len(locations) and reverse_exon_first == False:
-        debug(f"Reverse splicing or mapping detected for final exon only: removing final exon coordinates")
-        excluded = locations.pop()
-
-    elif reverse_exon_first == True and reverse_exon_index == 0:
-        debug(f"Reverse splicing or mapping detected for first exon only: removing first exon coordinates")
-        excluded = locations.pop(0)
-
-    elif reverse_exon_index > 0: # this will pick up any where reverse splicing/mapping is in a middle exon, or >1 exon (including first+last)
-        debug(f"Discarding sequence as reverse splicing detected (junction {reverse_exon_index})")
-        return "FAIL: Reverse splicing or mapping (middle or >1 exon)"
-
-    # Check that we've got enough exons to keep this
-    # Do this before coverage in case there are 0 locations left following reverse splice removal
-    if len(locations) < min_exons:
-        debug(f"Discarding sequence as number of exons found {len(locations)} is lower than the threshold {min_exons}")
-        return "FAIL: Not enough exons"
-
-
     #print(f"cDNA length = {cDNA_length}, full sequence length = {full_sequence_length}")
+
+    # need to remove first/last exon if they are the only one with reverse splicing/mapping BEFORE calculating coverage and number of exons
+    # ALSO - need to sort out cDNA length calculation above - start/end need to not include the first/last 'exons' if they are reverse (middle doesn't matter as they will be discarded anyway)
+    # Check the splice junctions don't jump backwards
+    if splice_back_index ==len(locations) and splice_back_first == True:
+        debug(f"Discarding sequence as reverse splicing detected (first and last junctions)")
+        return "FAIL: Reverse splicing (first and last junction)"
+
+    if splice_back_index ==len(locations):
+        debug(f"Discarding sequence as reverse splicing detected (final junction only)")
+        return "FAIL: Reverse splicing (final junction)"
+
+    if splice_back_first == True and splice_back_index == 0:
+        debug(f"Discarding sequence as reverse splicing detected (first junction only)")
+        return "FAIL: Reverse splicing (first junction)"
+
+
+    if splice_back_index > 0: # should only evaluate if it hasn't already failed
+        debug(f"Discarding sequence as reverse splicing detected (junction {splice_back_index})")
+        return "FAIL: Reverse splicing (middle junction)"
+     
 
     proportion_mapped = cDNA_length/full_sequence_length
     
@@ -707,6 +698,11 @@ def get_chexons_segment_string (sequence, genomic_file, gene, min_exons, min_cov
     if abs(locations[0][0] - locations[-1][-1]) / abs(gene["end"]-gene["start"]) < min_coverage:
         debug(f"Discarding sequence as coverage of gene was too low {abs(locations[0][0] - locations[-1][-1])} vs {min_coverage}")
         return "FAIL: Gene coverage too low" 
+
+    # Check that we've got enough exons to keep this
+    if len(locations) < min_exons:
+        debug(f"Discarding sequence as number of exons found {len(locations)} is lower than the threshold {min_exons}")
+        return "FAIL: Not enough exons"
 
 
     # Our splice boundaries are going to be the locations without the start and end position
