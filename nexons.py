@@ -120,8 +120,21 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
 
 def gene_matches(exons,gene,flex,endflex):
+
+
     for transcript in gene["transcripts"].values():
-        # Check the ends first as that's the easiest thing to do
+
+        if len([x for x in gene["transcripts"].values()]) == 1 and len(transcript["exons"])>1 and len(transcript["exons"]) == len(exons):
+            breakpoint()
+
+
+        # Check the number of exons matches, since that's really easy
+        if not len(transcript["exons"]) == len(exons):
+            # Not the same number of exons
+            continue
+
+
+        # Check the ends first as that's easy and uses a different threshold
         min_start=exons[0][0] - endflex
         max_start=min(exons[0][0]+endflex, exons[0][1])
 
@@ -137,10 +150,7 @@ def gene_matches(exons,gene,flex,endflex):
             # This can't be a match
             continue
 
-        # So we know the ends are OK.  Does it have the correct number of exons?
-        if not len(transcript["exons"]) == len(exons):
-            # Not the same number of exons
-            continue
+        # So we know the ends are OK. 
 
         # Do the exon positions match well enough
         exons_match = True
