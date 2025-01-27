@@ -5,7 +5,6 @@ import subprocess
 import os
 import sys
 import pysam
-from progressbar import ProgressBar, Percentage, Bar
 from pathlib import Path
 
 VERSION = "0.2.devel"
@@ -43,32 +42,6 @@ def main():
 
         log(f"Found {observations} valid splices in {bam_file}")
 
-
-    #This creates an output directory when it doesn't exist
-    outfile_path=Path(options.outfile)
-    outfile_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    
-    if options.both_out:
-        if options.outfile == "nexons_output.txt":
-            gtf_outfile = "nexons_output.gtf"
-            custom_outfile = "nexons_output.txt"
-        else:
-            stripped = options.outfile.replace(".txt", "")
-            stripped = stripped.replace(".gtf", "")
-            gtf_outfile = stripped + ".gtf"
-            custom_outfile = stripped + ".txt"            
-        write_gtf_output(quantitations, genes_transcripts_exons, gtf_outfile, options.mincount, splice_info)
-        write_output(quantitations, genes_transcripts_exons, custom_outfile, options.mincount, splice_info)
-
-    elif options.gtf_out:
-        if options.outfile == "nexons_output.txt":
-            outfile = "nexons_output.gtf"
-        else:
-            outfile = options.outfile
-        write_gtf_output(quantitations, genes_transcripts_exons, outfile)
-    else:
-        write_output(quantitations, genes_transcripts_exons, options.outfile)
 
 def build_index(genes):
     chr_lengths = {}
@@ -115,177 +88,6 @@ def debug (message):
         print("DEBUG:",message, file=sys.stderr)
 
 
-
-
-def write_output(data, gene_annotations, file, mincount, splice_info):
-    # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = {"count":0, "start":[1,2,3], "end":[4,5,6]}
-    # 
-    # We will have all genes in all BAM files, but might
-    # not have all splice forms in all BAM files
-
-    log(f"Writing output to {file} with min count {mincount}")
-
-    bam_files = list(data.keys())
- 
-    with open(file,"w") as outfile:
-        # Write the header
-        header = ["File","Gene ID", "Gene Name","Chr","Strand","SplicePattern", "Transcript id","Count","Starts","Ends"]
-        outfile.write("\t".join(header))
-        outfile.write("\n")
-
-        genes = data[bam_files[0]].keys()
-
-        lines_written = 0
-
-        for gene in genes:
-            # We'll make a list of the splices across all samples, and will track the 
-            # highest observed value so we can kick out splices which are very 
-            # infrequently observed in the whole set.
-
-            splices = {} 
-
-            for bam in bam_files:
-                these_splices = data[bam][gene].keys()
-
-                for splice in these_splices:
-                    if not splice in splices:
-                        splices[splice] = 0
-
-                    if data[bam][gene][splice]["count"] > splices[splice]:
-                        splices[splice] = data[bam][gene][splice]["count"]
-
-            # Now extract the subset which pass the filter as we'll report on 
-            # all of these
-
-            passed_splices = []
-
-            for splice in splices.keys():
-                if splices[splice] >= mincount or options.report_all:
-                    passed_splices.append(splice)
-
-            # Now we can go through the splices for all BAM files
-            for splice in passed_splices:
-                line_values = [
-                    gene,
-                    gene_annotations[gene]["name"],
-                    gene_annotations[gene]["chrom"],
-                    gene_annotations[gene]["strand"],
-                    ":".join("-".join(str(coord) for coord in junction) for junction in splice),
-                    splice_info[gene][splice]["transcript_id"]
-                ]
-
-                for bam in bam_files:
-                    if splice in data[bam][gene]:
-                        splice_line = [
-                            str(data[bam][gene][splice]["count"]),
-                            ",".join([str(x) for x in data[bam][gene][splice]["start"]]),
-                            ",".join([str(x) for x in data[bam][gene][splice]["end"]])
-                        ]
-                        print("\t".join([bam]+line_values+splice_line), file=outfile)
-                
-    debug(f"Wrote {len(passed_splices)} splices to {file}")
-
-
-def write_gtf_output(data, gene_annotations, file, mincount, splice_info):
-    # The structure for the data is 
-    # data[bam_file_name][gene_id][splicing_structure] = {count:0, start:[1,2,3], end:[4,5,6]}
-    # 
-    # We will have all genes in all BAM files, but might
-    # not have all splice forms in all BAM files
-
-    log(f"Writing GTF output to {file} with min count {mincount}")
-
-    # This copy will be the sum of counts across all samples.
-    splice_info_copy = splice_info.copy()
-    # set all counts to 0
-    for gene in splice_info_copy:
-        splice_copy_splices = splice_info_copy[gene].keys()
-        for splice_pat in splice_copy_splices: 
-            splice_info_copy[gene][splice_pat]["merged_count"] = 0       
-
-    bam_files = list(data.keys())
- 
-    with open("match_info.txt","w") as report_all_outfile:
-        if options.report_all:
-            report_all_header = ["seqname", "source", "feature", "start", "end", "id", "exact_count", "merged_count", "splice_pattern"]
-            report_all_outfile.write("\t".join(report_all_header))
-            report_all_outfile.write("\n")
- 
-        with open(file,"w") as outfile:
-            # Write the header
-            header = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
-            #header.extend(bam_files)
-            outfile.write("\t".join(header))
-            outfile.write("\n")
-
-            genes = data[bam_files[0]].keys()
-
-            lines_written = 0
-
-            for gene in genes:
-                splices = set() 
-
-                for bam in bam_files:
-                    these_splices = data[bam][gene].keys()
-
-                    for splice in these_splices:
-                        splices.add(splice)
-
-                gtf_gene_text = "gene_id " + gene
-
-                # Now we can go through the splices for all BAM files
-                for splice in splices:
-                    #line_values = [gene,gene_annotations[gene]["name"],gene_annotations[gene]["chrom"],gene_annotations[gene]["strand"],splice]
-                    splice_start = splice[0][0]
-                    splice_end = splice[-1][0]
-
-                    line_values = [gene_annotations[gene]["chrom"], "nexons", "transcript", splice_start, splice_end, 0, gene_annotations[gene]["strand"], 0]
-
-                    splice_text = "splicePattern " + ":".join("-".join(str(coord) for coord in junction) for junction in splice)
-
-                    line_above_min = False
-                    for bam in bam_files:
-                        if splice in data[bam][gene]:
-                           
-                            transcript_text = "transcript_id " + str(splice_info[gene][splice]["transcript_id"])
-                            
-                            debug(f"splice is  {splice}")
-                            debug(f"splice info  {splice_info[gene][splice]}")
-                            
-                            attribute_field = transcript_text + "; " + gtf_gene_text + "; " + splice_text
-                            
-                            line_values[5] += data[bam][gene][splice]["count"]  # adding the count
-                            # if we've got multiple bam files, we want to add up the counts but not keep adding ie. repeating the attribute info.
-                            if(len(line_values) == 8):
-                            
-                                line_values.append(attribute_field)
-
-                            if data[bam][gene][splice]["count"] >= mincount:
-                                line_above_min = True
-                                
-                            # set the count in the splice copy dict
-                            splice_info_copy[gene][splice]["merged_count"] += data[bam][gene][splice]["count"]
-      
-                    if line_above_min:
-                        lines_written += 1
-                        outfile.write("\t".join([str(x) for x in line_values]))
-                        outfile.write("\n")
-                        
-            if options.report_all:
-
-                splice_info_splices = splice_info_copy[gene].keys()
-                for splice_info_splice in splice_info_splices: 
-                    splice_is_start = splice_info_splice[0][0]
-                    splice_is_end = splice_info_splice[-1][0]
-                    other_info = splice_info_copy[gene][splice_info_splice]
-                    out_line = [gene, "nexons", "transcript", splice_is_start, splice_is_end, other_info["transcript_id"], other_info["count"], other_info["merged_count"], splice_info_splice]
-                    report_all_outfile.write("\t".join([str(x) for x in out_line]))
-                    report_all_outfile.write("\n")
-
-    debug(f"Wrote {lines_written} splices to {file}")
-
-
 def process_bam_file(genes, index, bam_file, direction, flex, endflex):
     counts = {}
 
@@ -306,21 +108,69 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
         possible_genes = get_possible_genes(index, read.reference_name, exons[0][0]-endflex, exons[-1][-1]+endflex)
 
-        if possible_genes:
-            breakpoint()
 
-        # for gene in possible_genes:
-        #     transcript = gene_matches(exons,gene,flex,endflex)
-        #     if transcript is not None:
-        #         # Add this to the transcript count
-        #         pass
+        for gene_id in possible_genes:
+            transcript_id = gene_matches(exons,genes[gene_id],flex,endflex)
+            if transcript_id is not None:
+                # Add this to the transcript count
+                pass
 
 
     return counts
 
 
 def gene_matches(exons,gene,flex,endflex):
-    pass
+    for transcript in gene["transcripts"].values():
+        # Check the ends first as that's the easiest thing to do
+        min_start=exons[0][0] - endflex
+        max_start=min(exons[0][0]+endflex, exons[0][1])
+
+        if not (transcript["start"]>=min_start  and transcript["start"] <= max_start):
+            # This can't be a match
+            continue
+
+
+        max_end=exons[-1][1] + endflex
+        min_end=max(exons[-1][0], exons[-1][1]-endflex)
+
+        if not (transcript["end"]>=min_end  and transcript["end"] <= max_end):
+            # This can't be a match
+            continue
+
+        # So we know the ends are OK.  Does it have the correct number of exons?
+        if not len(transcript["exons"]) == len(exons):
+            # Not the same number of exons
+            continue
+
+        # Do the exon positions match well enough
+        exons_match = True
+        for i in range(len(exons)):
+            if i==0:
+                # We just check the end
+                if not abs(exons[i][1] - transcript["exons"][i][1]) <= flex:
+                    exons_match = False
+                    break
+
+            elif i==len(exons)-1:
+                # We just check the start
+                if not abs(exons[i][0] - transcript["exons"][i][0]) <= flex:
+                    exons_match = False
+                    break
+            
+            else: 
+                # We check start and end
+                if not abs(exons[i][1] - transcript["exons"][i][1]) <= flex:
+                    exons_match = False
+                    break
+                if not abs(exons[i][0] - transcript["exons"][i][0]) <= flex:
+                    exons_match = False
+                    break
+
+        if exons_match:
+            breakpoint()
+            return transcript["id"]
+        
+        return None
 
 
 def get_possible_genes(index, chr, start, end):
@@ -336,7 +186,7 @@ def get_possible_genes(index, chr, start, end):
 
         for gene in index[chr][b]:
             if start >= gene["start"] and end <= gene["end"]:
-                genes.add(gene)
+                genes.add(gene["id"])
 
     return genes
     
