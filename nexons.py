@@ -329,15 +329,13 @@ def get_possible_genes(index, chr, start, end):
     start_bin = int(start/RESOLUTION)
     end_bin = int(end/RESOLUTION)
 
-    breakpoint()
-
     for b in range(start_bin,end_bin+1):
         if b >= len(index[chr]):
             # We're past the last gene so don't look any more
             break
 
         for gene in index[chr][b]:
-            if gene["start"]>=start and gene["end"] <= end:
+            if start >= gene["start"] and end <= gene["end"]:
                 genes.add(gene)
 
     return genes
