@@ -220,11 +220,11 @@ def get_exons(read):
         # 9 = back
 
         if start is None:
-            start = read.reference_start
-            current_pos = read.reference_start
+            start = read.reference_start+1 # Reference start is zero based
+            current_pos = start
             if tuple_operation == 4 or tuple_operation == 5: # soft or hard clip
-                start += tuple_length
-                current_pos += tuple_length
+                # These aren't included in the reference start position
+                # so we just ignore them
                 continue
         
         if tuple_operation == 0:
