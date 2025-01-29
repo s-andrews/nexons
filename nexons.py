@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import tempfile
-import subprocess
-import os
 import sys
 import pysam
 from pathlib import Path
@@ -37,10 +34,9 @@ def main():
  
         observations = 0
         for gene in quantitations[bam_file].keys():
-            for countdata in quantitations[bam_file][gene].values():
-                observations += countdata["count"]
+            observations += quantitations[bam_file][gene]
 
-        log(f"Found {observations} valid splices in {bam_file}")
+        log(f"Found {observations} valid matches in {bam_file}")
 
 
 def build_index(genes):
@@ -91,6 +87,10 @@ def debug (message):
 def process_bam_file(genes, index, bam_file, direction, flex, endflex):
     counts = {}
 
+    failures = {
+        "No_Gene":0
+    }
+
     samfile = pysam.AlignmentFile(bam_file, "rb")
 
     for read_count,read in enumerate(samfile.fetch(until_eof=True)):
@@ -106,27 +106,35 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
         exons = get_exons(read)
 
-        possible_genes = get_possible_genes(index, read.reference_name, exons[0][0]-endflex, exons[-1][-1]+endflex)
+        # We want the surrounding genes.  We shorten the read by the amount of 
+        # endflex so that we still find genes which surround us if we don't 
+        # have perfectly positioned ends.
+        possible_genes = get_possible_genes(index, read.reference_name, min(exons[0][0]+endflex, exons[0][1]), max(exons[-1][1]-endflex, exons[-1][0]))
+
+        if not possible_genes:
+            failures["No_Gene"] += 1
+            continue
 
 
         for gene_id in possible_genes:
             transcript_id = gene_matches(exons,genes[gene_id],flex,endflex)
             if transcript_id is not None:
                 # Add this to the transcript count
-                pass
+                gene_transcript_combo = (gene_id,transcript_id)
 
+                if not gene_transcript_combo in counts:
+                    counts[gene_transcript_combo] = 1
+                else:
+                    counts[gene_transcript_combo] += 1
+                
+                break # No point checking more transcripts?
 
     return counts
 
 
 def gene_matches(exons,gene,flex,endflex):
 
-
     for transcript in gene["transcripts"].values():
-
-        if len([x for x in gene["transcripts"].values()]) == 1 and len(transcript["exons"])>1 and len(transcript["exons"]) == len(exons):
-            breakpoint()
-
 
         # Check the number of exons matches, since that's really easy
         if not len(transcript["exons"]) == len(exons):
@@ -177,7 +185,6 @@ def gene_matches(exons,gene,flex,endflex):
                     break
 
         if exons_match:
-            breakpoint()
             return transcript["id"]
         
         return None
@@ -254,9 +261,6 @@ def get_exons(read):
     exons.append((start,(current_pos-1)))
 
     return exons
-
-
-
 
 
 def read_gtf(gtf_file, max_tsl):
@@ -346,7 +350,7 @@ def read_gtf(gtf_file, max_tsl):
             if transcript_name is None:
                 transcript_name = transcript_id
 
-            exons = [start, end]
+            exon = [start, end]
             
 
             if gene_id not in genes:
@@ -385,8 +389,17 @@ def read_gtf(gtf_file, max_tsl):
                     genes[gene_id]["transcripts"][transcript_id]["end"] = end
 
 
-            genes[gene_id]["transcripts"][transcript_id]["exons"].append([start,end])
+            genes[gene_id]["transcripts"][transcript_id]["exons"].append(exon)
 
+
+    # Before returning the results we need to put the exons
+    # for each transcript into order.  We keep everything
+    # low - high since that's how the BAM files also structure
+    # their results
+            
+    for gene in genes.values():
+        for transcript in gene["transcripts"].values():
+            transcript["exons"].sort(key = lambda x: x[0])
 
     return genes
 
@@ -430,7 +443,7 @@ def get_options():
     parser.add_argument(
         "--endflex","-e",
         help="How many bases different can transcript ends be and still merge them",
-        default=50, 
+        default=1000, 
         type=int
     )
 
