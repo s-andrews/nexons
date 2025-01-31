@@ -11,6 +11,7 @@ RESOLUTION = 10000
 options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
 def main():
+
     global options
     options = get_options()
     
@@ -99,7 +100,11 @@ def debug (message):
 
 
 def process_bam_file(genes, index, bam_file, direction, flex, endflex):
-    counts = {}
+    counts = {
+        "unique":{},
+        "partial":{},
+        "gene":{}
+    }
 
     failures = {
         "No_Gene":0,
@@ -182,60 +187,191 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
 def gene_matches(exons,gene,flex,endflex):
 
+    # We'll look for matches between this structure and 
+    # the transcripts in this gene.  We are going to 
+    # allow either complete or partial matches. At the
+    # end we will return two things - a transcript id
+    # and a status
+    # 
+    # If nothing matches then the transcript will be
+    # None
+    # 
+    # If the read matches the transcript perfectly then
+    # the transcript will be the transcript ID and the
+    # status will be "unique"
+    # 
+    # If the read matches partially but only to one 
+    # transcript (it doesn't match the others) then
+    # the status will be "partial"
+    # 
+    # If the read partially matches multiple transcripts
+    # then the status will be "multi"
+
+    matched_transcript = None
+    status = None
+
     for transcript in gene["transcripts"].values():
 
-        # Check the number of exons matches, since that's really easy
-        if not len(transcript["exons"]) == len(exons):
-            # Not the same number of exons
-            continue
+        success, partial = match_exons(exons, transcript["exons"], flex, endflex)
+
+        if success and not partial:
+            # It's a full match - we can stop looking
+            matched_transcript = transcript["id"]
+            status = "unique"
+            break
+
+        if success and partial:
+            if matched_transcript is None:
+                matched_transcript = transcript["id"]
+                status = "partial"
+            else:
+                status = "multi"
+
+    return (matched_transcript,status)
 
 
-        # Check the ends first as that's easy and uses a different threshold
-        min_start=exons[0][0] - endflex
-        max_start=min(exons[0][0]+endflex, exons[0][1])
+def match_exons(exons,transcript,flex,endflex):
 
-        if not (transcript["start"]>=min_start  and transcript["start"] <= max_start):
-            # This can't be a match
-            continue
+        # We need to match the exons of this transcript 
+        # to the read.
+
+        # We will only allow an exact match, or a sub-match
+        # where the read is contained entirely within the 
+        # transcript
+
+        # The process will be 
+        # 
+        # 1. Start from the beginning of the transcript - try to
+        # match to the first exon with endflex.
+        # 2. If that doesn't work look for an internal match to any 
+        # exon using flex.
+        # 3. Once we have a match continue it through the exons to
+        # see if we can run it to the end.  We'll either get to the
+        # end of the transcript (with endflex) or we'll run out within
+        # an exon, in which case we'll be a partial match
+
+        full_match = True
+        matches = True
+
+        current_transcript_exon = 0
+        current_read_exon = 0
+        last_transcript_exon = len(transcript)-1
+        last_read_exon = len(exons)-1
+
+        while True:
+
+            # We'll step through the different exons of the read to
+            # try to match them.
+
+            min_start = exons[current_read_exon][0]
+            max_start = exons[current_read_exon][0]
+
+            min_end = exons[current_read_exon][1]
+            max_end = exons[current_read_exon][1]
 
 
-        max_end=exons[-1][1] + endflex
-        min_end=max(exons[-1][0], exons[-1][1]-endflex)
+            # Now we'll add the flexbility which is given to this exon
+            if current_transcript_exon == 0:
+                # We get more flex on the start
+                min_start -= endflex
+                max_start += endflex
 
-        if not (transcript["end"]>=min_end  and transcript["end"] <= max_end):
-            # This can't be a match
-            continue
+            else:
+                min_start -= flex
+                max_start += flex
 
-        # So we know the ends are OK. 
+            if max_start > exons[current_read_exon][1]:
+                max_start = exons[current_read_exon][1]
 
-        # Do the exon positions match well enough
-        exons_match = True
-        for i in range(len(exons)):
-            if i==0:
-                # We just check the end
-                if not abs(exons[i][1] - transcript["exons"][i][1]) <= flex:
-                    exons_match = False
-                    break
-
-            elif i==len(exons)-1:
-                # We just check the start
-                if not abs(exons[i][0] - transcript["exons"][i][0]) <= flex:
-                    exons_match = False
-                    break
             
-            else: 
-                # We check start and end
-                if not abs(exons[i][1] - transcript["exons"][i][1]) <= flex:
-                    exons_match = False
-                    break
-                if not abs(exons[i][0] - transcript["exons"][i][0]) <= flex:
-                    exons_match = False
+            if current_transcript_exon == last_transcript_exon:
+                min_end -= endflex
+                max_end += endflex
+
+            else:
+                min_end -= flex
+                max_end += flex
+
+            if min_end < exons[current_read_exon][0]:
+                min_end = exons[current_read_exon][0]
+
+
+            # See if we match this exon
+            start_matches = transcript[current_transcript_exon][0] >= min_start and transcript[current_transcript_exon][0] <= max_start
+            end_matches = transcript[current_transcript_exon][1] <= max_end and transcript[current_transcript_exon][1] >= min_end
+
+            if start_matches and end_matches:
+                # This exon matches
+
+                if current_read_exon == last_read_exon:
+                    # We're at the end of the match
+                    if current_transcript_exon != last_transcript_exon:
+                        # We've matched but not to the end of the transcript
+                        full_match = False
+                    
+                    # We don't need to look any further
                     break
 
-        if exons_match:
-            return transcript["id"]
-        
-        return None
+                if current_read_exon == 0:
+                    # We've matched but are there enough transcript exons
+                    # left to accommodate us
+                    if len(exons) > (len(transcript)-current_transcript_exon):
+                        # This can't possibly work
+                        matches = False
+                        break
+
+                # We matched and there's more read exons left. 
+                current_read_exon += 1
+                current_transcript_exon += 1
+                continue
+
+            # Not everything matches.
+
+            # We would be in the first exon and not have made the first match yet.
+            if current_read_exon == 0 and exons[0][0] > transcript[current_transcript_exon][1]:
+                # We can just try the next transcript exon if there is one
+                if current_transcript_exon < last_transcript_exon:
+                    current_transcript_exon += 1
+                    continue
+                else:
+                    # This isn't going to match
+                    matches = False
+                    break
+
+            # We could have a partial match.  If we're the first exon of a multi-exon read 
+            # then the start could be within the exon.
+            if current_read_exon == 0 and len(exons) > 1:
+                if end_matches and exons[0][0] >= transcript[current_transcript_exon][0] and exons[0][0] <= transcript[current_transcript_exon][1]:
+                    full_match = False
+                    current_read_exon += 1
+                    current_transcript_exon += 1
+                    continue
+                else:
+                    matches = False
+                    break
+                
+            # If we're the last exon of a multi-exon read then the end could be within the 
+            # exon
+            if current_read_exon == last_read_exon and len(exons) > 1:
+                if start_matches and exons[current_read_exon][1] >= transcript[current_transcript_exon][0] and exons[current_read_exon][1] <= transcript[current_transcript_exon][1]:
+                    full_match = False
+                    # This is the last exon so we can stop looking
+                    break
+                else:
+                    matches = False
+                    break
+
+                
+            # If we're a single exon read then both start and end could be within the exon
+            if len(exons) == 1 and max_start < transcript[current_transcript_exon][1] and min_end > transcript[current_transcript_exon][0]:
+                full_match = False
+                break 
+
+            # If we get here then there's no saving us
+            matches = False
+            break
+
+        return (matches, not full_match)
 
 
 def get_possible_genes(index, chr, start, end, direction):
