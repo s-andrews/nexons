@@ -11,7 +11,7 @@ RESOLUTION = 10000
 options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
 def main():
-
+    
     global options
     options = get_options()
     
@@ -27,18 +27,15 @@ def main():
     gene_index = build_index(genes_transcripts_exons)
 
     # Process each of the BAM files and add their data to the quantitations
-    quantitations = {}
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        total_count,quantitations[bam_file] = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+        outcomes,quantitations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
  
-        observations = 0
-        for gene in quantitations[bam_file].keys():
-            observations += quantitations[bam_file][gene]
+        log(f"Summary for {bam_file}:")
+        for metric in outcomes:
+            log(f"{metric}: {outcomes[metric]}")
 
-        log(f"Found {observations} valid matches in {bam_file} out of {total_count}")
-
-    write_output(genes_transcripts_exons,quantitations,options.outfile)
+    #write_output(genes_transcripts_exons,quantitations,options.outfile)
 
 
 def write_output(genes, quantitations, outfile):
@@ -106,14 +103,17 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         "gene":{}
     }
 
-    failures = {
-        "No_Gene":0,
-        "No_Transcript":0
+    outcomes = {
+        "Total_Reads": 0, # Total number of primary reads in the file
+        "No_Gene":0, # Reads not surrounded by a gene
+        "No_Hit": 0, # Reads surrounded by gene but not aligning to any transcripts
+        "Gene":0, # Reads quantitated at the gene level
+        "Multi_Gene":0, # Reads compatible with more than one gene
+        "Partial":0, # Reads compatible with one transcript, but not covering all of it
+        "Unique":0 # Reads compatible with one transcript and matching completely
     }
 
     samfile = pysam.AlignmentFile(bam_file, "rb")
-
-    read_count = 0
 
     for read in samfile.fetch(until_eof=True):
 
@@ -122,11 +122,11 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             # This isn't the primary alignment
             continue
 
-        read_count += 1
+        outcomes["Total_Reads"] += 1
 
         if not read.reference_name in index:
             # There are no features on this chromsome
-            failures["No_Gene"] += 1
+            outcomes["No_Gene"] += 1
             continue
 
 
@@ -158,31 +158,84 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         possible_genes = get_possible_genes(index, read.reference_name, min(exons[0][0]+endflex, exons[0][1]), max(exons[-1][1]-endflex, exons[-1][0]), gene_direction)
 
         if not possible_genes:
-            failures["No_Gene"] += 1
+            outcomes["No_Gene"] += 1
             continue
 
         found_hit = False
+        found_gene_id = None
+        found_transcript_id = None
+        found_status = None
+
         for gene_id in possible_genes:
-            transcript_id = gene_matches(exons,genes[gene_id],flex,endflex)
+            # Transcript ID will be the ID of the matched transcript.
+            # Status will be one of:
+            # 
+            # unique, partial, multi 
+
+            transcript_id,status = gene_matches(exons,genes[gene_id],flex,endflex)
             if transcript_id is not None:
-                # Add this to the transcript count
-                gene_transcript_combo = (gene_id,transcript_id)
+                if status=="unique":
+                    # We're done here
+                    found_hit = True
+                    found_gene_id = gene_id
+                    found_transcript_id = transcript_id
+                    found_status = "unique"
+                    break
 
-                if not gene_transcript_combo in counts:
-                    counts[gene_transcript_combo] = 1
                 else:
-                    counts[gene_transcript_combo] += 1
-                
-                found_hit = True
-                break # No point checking more transcripts?
+                    # The logic is the same for both partial and 
+                    # multi.  We've locked in the status from this
+                    # gene but we could also hit another gene which
+                    # would then mean that we don't assign this read
+                    # at all.
+                    if found_gene_id is not None:
+                        # We're done - we can't assign this at all
+                        outcomes["Multi_Gene"] += 1
+                        found_hit = False
+                        break
 
-            if found_hit:
-                break
+                    # We can assign this hit but keep looking in case
+                    # other genes find anything
+                    found_hit = True
+                    found_transcript_id = transcript_id
+                    found_gene_id = gene_id
+                    found_status = status
+                    continue
 
+         # Now we can increase the appropriate counts
         if not found_hit:
-            failures["No_Transcript"] += 1
+            outcomes["No_Hit"] += 1
 
-    return (read_count,counts)
+        else:
+            # There is a hit
+
+            # We always increment the gene
+            outcomes["Gene"] += 1
+            if not found_gene_id in counts["gene"]:
+                counts["gene"][found_gene_id] = 1
+            else:
+                counts["gene"][found_gene_id] += 1
+
+            if found_status == "partial" or found_status == "unique":
+                # We increment the partial counts
+                outcomes["Partial"] += 1
+
+                if not found_transcript_id in counts["partial"]:
+                    counts["partial"][found_transcript_id] = 1
+                else:
+                    counts["partial"][found_transcript_id] += 1
+
+            if found_status == "unique":
+                # We increase the unique count
+                outcomes["Unique"] += 1
+
+                if not found_transcript_id in counts["unique"]:
+                    counts["unique"][found_transcript_id] = 1
+                else:
+                    counts["unique"][found_transcript_id] += 1
+
+
+    return (outcomes,counts)
 
 
 def gene_matches(exons,gene,flex,endflex):
@@ -342,6 +395,12 @@ def match_exons(exons,transcript,flex,endflex):
             # then the start could be within the exon.
             if current_read_exon == 0 and len(exons) > 1:
                 if end_matches and exons[0][0] >= transcript[current_transcript_exon][0] and exons[0][0] <= transcript[current_transcript_exon][1]:
+                    # This could work, but only if we have enough exons left
+                    if len(exons) > (len(transcript)-current_transcript_exon):
+                        # This can't possibly work
+                        matches = False
+                        break
+
                     full_match = False
                     current_read_exon += 1
                     current_transcript_exon += 1
