@@ -8,7 +8,6 @@ VERSION = "0.2.devel"
 RESOLUTION = 10000
 
 
-
 options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
 def main():
@@ -30,13 +29,28 @@ def main():
     quantitations = {}
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        quantitations[bam_file] = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+        total_count,quantitations[bam_file] = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
  
         observations = 0
         for gene in quantitations[bam_file].keys():
             observations += quantitations[bam_file][gene]
 
-        log(f"Found {observations} valid matches in {bam_file}")
+        log(f"Found {observations} valid matches in {bam_file} out of {total_count}")
+
+    write_output(genes_transcripts_exons,quantitations,options.outfile)
+
+
+def write_output(genes, quantitations, outfile):
+
+    # Get the full set of genes/transcripts from all of the quantitations since
+    # many won't have anything
+    gene_combos = set()
+    for q in quantitations:
+        for g in q:
+            gene_combos.add(g)
+
+    with open(outfile,"wt",encoding="utf8") as out:
+        pass
 
 
 def build_index(genes):
@@ -88,34 +102,61 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
     counts = {}
 
     failures = {
-        "No_Gene":0
+        "No_Gene":0,
+        "No_Transcript":0
     }
 
     samfile = pysam.AlignmentFile(bam_file, "rb")
 
-    for read_count,read in enumerate(samfile.fetch(until_eof=True)):
+    read_count = 0
 
-        if not read.reference_name in index:
-            # There are no features on this chromsome
-            continue
+    for read in samfile.fetch(until_eof=True):
+
 
         if read.is_secondary:
             # This isn't the primary alignment
             continue
 
+        read_count += 1
+
+        if not read.reference_name in index:
+            # There are no features on this chromsome
+            failures["No_Gene"] += 1
+            continue
+
 
         exons = get_exons(read)
+
+        # We need to work out if we want to limit the directionality of the
+        # genes we're going to look at.
+        # We will allow A (all directions), F (forward only) or R (reverse only) 
+        gene_direction="A"
+
+        if direction != "none":
+            # We need to care about directionality
+            if direction == "same":
+                if read.is_reverse:
+                    gene_direction = "R"
+                else:
+                    gene_direction = "F"
+            elif direction == "opposite":
+                if read.is_reverse:
+                    gene_direction = "F"
+                else:
+                    gene_direction = "R"
+            else:
+                raise Exception("Unknown direction '"+direction+"'")
 
         # We want the surrounding genes.  We shorten the read by the amount of 
         # endflex so that we still find genes which surround us if we don't 
         # have perfectly positioned ends.
-        possible_genes = get_possible_genes(index, read.reference_name, min(exons[0][0]+endflex, exons[0][1]), max(exons[-1][1]-endflex, exons[-1][0]))
+        possible_genes = get_possible_genes(index, read.reference_name, min(exons[0][0]+endflex, exons[0][1]), max(exons[-1][1]-endflex, exons[-1][0]), gene_direction)
 
         if not possible_genes:
             failures["No_Gene"] += 1
             continue
 
-
+        found_hit = False
         for gene_id in possible_genes:
             transcript_id = gene_matches(exons,genes[gene_id],flex,endflex)
             if transcript_id is not None:
@@ -127,9 +168,16 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 else:
                     counts[gene_transcript_combo] += 1
                 
+                found_hit = True
                 break # No point checking more transcripts?
 
-    return counts
+            if found_hit:
+                break
+
+        if not found_hit:
+            failures["No_Transcript"] += 1
+
+    return (read_count,counts)
 
 
 def gene_matches(exons,gene,flex,endflex):
@@ -190,8 +238,9 @@ def gene_matches(exons,gene,flex,endflex):
         return None
 
 
-def get_possible_genes(index, chr, start, end):
+def get_possible_genes(index, chr, start, end, direction):
     # We need to find all genes which completely surround the reported position
+    # Direction is going to be F (forward), R, (reverse) or A (all)
     genes = set()
     start_bin = int(start/RESOLUTION)
     end_bin = int(end/RESOLUTION)
@@ -202,6 +251,11 @@ def get_possible_genes(index, chr, start, end):
             break
 
         for gene in index[chr][b]:
+            if direction != "A":
+                if gene["strand"] == "+" and direction == "R":
+                    continue
+                if gene["strand"] == "-" and direction == "F":
+                    continue
             if start >= gene["start"] and end <= gene["end"]:
                 genes.add(gene["id"])
 
