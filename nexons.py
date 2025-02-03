@@ -35,7 +35,7 @@ def main():
         for metric in outcomes:
             log(f"{metric}: {outcomes[metric]}")
 
-    #write_output(genes_transcripts_exons,quantitations,options.outfile)
+    write_output(genes_transcripts_exons,quantitations,options.outfile)
 
 
 def write_output(genes, quantitations, outfile):
@@ -677,9 +677,9 @@ def get_options():
     )
 
     parser.add_argument(
-        "--outfile","-o",
-        help="The file to write the output count table to",
-        default="nexons_output.txt"
+        "--outbase","-o",
+        help="The basename for the output count tables. All outputs will start with this prefix",
+        default="./nexons_output"
     )
 
     parser.add_argument(
@@ -693,13 +693,6 @@ def get_options():
         "--endflex","-e",
         help="How many bases different can transcript ends be and still merge them",
         default=1000, 
-        type=int
-    )
-
-    parser.add_argument(
-        "--mincount","-m",
-        help="What is the minimum number of observations for any given variant to report",
-        default=2, 
         type=int
     )
 
