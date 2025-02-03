@@ -26,29 +26,68 @@ def main():
 
     gene_index = build_index(genes_transcripts_exons)
 
+    results = []
+
     # Process each of the BAM files and add their data to the quantitations
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
         outcomes,quantitations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+
+        results.append(quantitations)
  
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
             log(f"{metric}: {outcomes[metric]}")
 
-    write_output(genes_transcripts_exons,quantitations,options.outfile)
+    write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
 
-def write_output(genes, quantitations, outfile):
+def write_output(genes, quantitations, bam_files, outbase):
 
-    # Get the full set of genes/transcripts from all of the quantitations since
-    # many won't have anything
-    gene_combos = set()
-    for q in quantitations:
-        for g in q:
-            gene_combos.add(g)
+    # Quantitation is a list of outputs from the bam files.  Each one of these
+    # will be a dictionary with "unique", "partial" and "gene".
+    # The unique and partial will have keys of (transcript_id, gene_id) and the
+    # gene will just have gene_id.
 
-    with open(outfile,"wt",encoding="utf8") as out:
-        pass
+    for slot in ["unique","partial"]:
+        log(f"Processing {slot} output")
+        outfile = outbase + "_"+slot+".txt"
+        log(f"Outfile is {outfile}")
+
+        # We need a list of all transcript and gene ids used and their detials
+        all_ids = set()
+
+        for q in quantitations:
+            for id in q[slot]:
+                if not id in all_ids:
+                    all_ids.add(id)
+
+        # That gets us all of the possible ids.  Now we can go through these in
+        # each sample
+        
+        with open(outfile,"wt",encoding="utf8") as out:
+            header = ["Transcript_ID","Gene_ID","Gene_Name","Chr","Start","End","Strand"]
+            header.extend(bam_files)
+
+            print("\t".join(header), file=out)
+
+            for id in all_ids:
+                gene_id,transcript_id = id
+                gene_name = genes[gene_id]["name"]
+                chromosome = genes[gene_id]["chrom"]
+                start = genes[gene_id]["transcripts"][transcript_id]["start"]
+                end = genes[gene_id]["transcripts"][transcript_id]["end"]
+                strand = genes[gene_id]["transcripts"][transcript_id]["strand"]
+
+                values = [transcript_id, gene_id,gene_name,chromosome,start,end,strand]
+
+                for q in quantitations:
+                    if id in q[slot]:
+                        values.append(q[slot][id])
+                    else:
+                        values.append(0)
+
+                print("\t".join([str(x) for x in values]), file=out)
 
 
 def build_index(genes):
@@ -220,19 +259,19 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 # We increment the partial counts
                 outcomes["Partial"] += 1
 
-                if not found_transcript_id in counts["partial"]:
-                    counts["partial"][found_transcript_id] = 1
+                if not (found_gene_id,found_transcript_id) in counts["partial"]:
+                    counts["partial"][(found_gene_id,found_transcript_id)] = 1
                 else:
-                    counts["partial"][found_transcript_id] += 1
+                    counts["partial"][(found_gene_id,found_transcript_id)] += 1
 
             if found_status == "unique":
                 # We increase the unique count
                 outcomes["Unique"] += 1
 
-                if not found_transcript_id in counts["unique"]:
-                    counts["unique"][found_transcript_id] = 1
+                if not (found_gene_id,found_transcript_id) in counts["unique"]:
+                    counts["unique"][(found_gene_id,found_transcript_id)] = 1
                 else:
-                    counts["unique"][found_transcript_id] += 1
+                    counts["unique"][(found_gene_id,found_transcript_id)] += 1
 
 
     return (outcomes,counts)
