@@ -90,6 +90,47 @@ def write_output(genes, quantitations, bam_files, outbase):
                 print("\t".join([str(x) for x in values]), file=out)
 
 
+
+    for slot in ["gene"]:
+        log(f"Processing {slot} output")
+        outfile = outbase + "_"+slot+".txt"
+        log(f"Outfile is {outfile}")
+
+        # We need a list of gene ids used
+        all_ids = set()
+
+        for q in quantitations:
+            for id in q[slot]:
+                if not id in all_ids:
+                    all_ids.add(id)
+
+        # That gets us all of the possible ids.  Now we can go through these in
+        # each sample
+        
+        with open(outfile,"wt",encoding="utf8") as out:
+            header = ["Gene_ID","Gene_Name","Chr","Start","End","Strand"]
+            header.extend(bam_files)
+
+            print("\t".join(header), file=out)
+
+            for gene_id in all_ids:
+                gene_name = genes[gene_id]["name"]
+                chromosome = genes[gene_id]["chrom"]
+                start = genes[gene_id]["start"]
+                end = genes[gene_id]["end"]
+                strand = genes[gene_id]["strand"]
+
+                values = [gene_id,gene_name,chromosome,start,end,strand]
+
+                for q in quantitations:
+                    if gene_id in q[slot]:
+                        values.append(q[slot][gene_id])
+                    else:
+                        values.append(0)
+
+                print("\t".join([str(x) for x in values]), file=out)
+
+
 def build_index(genes):
     chr_lengths = {}
 
