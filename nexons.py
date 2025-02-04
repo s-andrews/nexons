@@ -35,11 +35,35 @@ def main():
 
         results.append(quantitations)
  
+        write_qc_report(bam_file,outcomes, options.outbase)
+
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
             log(f"{metric}: {outcomes[metric]}")
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
+
+
+def write_qc_report(bam_file, outcomes, outbase):
+    bam_file = bam_file[:-4] # Remove trailing .bam
+    outfile = outbase+"_"+bam_file+"_qc.html"
+    template = Path(__file__).parent / "templates/nexons_qc_template.html"
+
+    template_text = ""
+    with open(template, "rt", encoding="utf8") as infh:
+        for line in infh:
+            template_text += line
+
+    template_text = template_text.replace("%%BAMFILE%%",bam_file)
+
+    for metric in outcomes:
+        value = f"{outcomes[metric]:,d}"
+        template_text = template_text.replace(f"%%{metric}%%",value)
+        template_text = template_text.replace(f"%%{metric}_Raw%%",str(outcomes[metric]))
+
+
+    with open(outfile,"wt",encoding="utf8") as out:
+        out.write(template_text)
 
 
 def write_output(genes, quantitations, bam_files, outbase):
@@ -184,7 +208,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
     }
 
     outcomes = {
-        "Total_Reads": 0, # Total number of primary reads in the file
+        "Total_Reads": 0, # Total number of reads in the file
+        "Primary_Alignment": 0, # Total number of primary alignments
+        "Secondary_Alignment": 0, # Total number of secondary alignments
         "No_Gene":0, # Reads not surrounded by a gene
         "No_Hit": 0, # Reads surrounded by gene but not aligning to any transcripts
         "Gene":0, # Reads quantitated at the gene level
@@ -197,12 +223,14 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
     for read in samfile.fetch(until_eof=True):
 
+        outcomes["Total_Reads"] += 1
 
         if read.is_secondary:
             # This isn't the primary alignment
+            outcomes["Secondary_Alignment"] += 1
             continue
 
-        outcomes["Total_Reads"] += 1
+        outcomes["Primary_Alignment"] += 1
 
         if not read.reference_name in index:
             # There are no features on this chromsome
