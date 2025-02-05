@@ -208,6 +208,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
     outcomes = {
         "Total_Reads": 0, # Total number of reads in the file
+        "No_Alignment" :0, # No reported alignment
         "Primary_Alignment": 0, # Total number of primary alignments
         "Secondary_Alignment": 0, # Total number of secondary alignments
         "No_Gene":0, # Reads not surrounded by a gene
@@ -223,6 +224,11 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
     for read in samfile.fetch(until_eof=True):
 
         outcomes["Total_Reads"] += 1
+
+        if read.is_unmapped:
+            # Nothing to see here
+            outcomes["No_Alignment"] += 1
+            continue
 
         if read.is_secondary:
             # This isn't the primary alignment
