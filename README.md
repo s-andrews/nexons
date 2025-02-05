@@ -3,6 +3,9 @@
 # Introduction
 Nexons is a program to quantitate RNA-Seq data from nanopore sequencing runs.  It takes in a BAM file aligned with a suitable spliced aligner, and a GTF file of gene annotations from the genome to which the BAM file was aligned and creates a series of count tables from transcript or gene level matches with differing degress of confidence. It also generates QC reports to summarise the findings from each file.
 
+![Read Fate](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/read_fate.png)
+![Alignment Fate](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/alignment_fate.png)
+
 # Installation
 Nexons is a python program which should work under any recent version of python3.  It depends on the following non-core packages
 
