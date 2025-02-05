@@ -45,8 +45,7 @@ def main():
 
 
 def write_qc_report(bam_file, outcomes, outbase):
-    bam_file = bam_file[:-4] # Remove trailing .bam
-    outfile = outbase+"_"+bam_file+"_qc.html"
+    outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
     template_text = ""
