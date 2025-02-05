@@ -64,7 +64,7 @@
                     </tbody>
                   </table>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <div style="width: 100%;" class="pt-1">
                   <canvas id="fatechart" style="width: 100%;"></canvas>
                 </div>
@@ -89,15 +89,15 @@
             label: 'Read Fate Summary',
             data: [%%Secondary_Alignment_Raw%%,%%Unique_Raw%%,%%Partial_Raw%%,%%Gene_Raw%%,%%Multi_Gene_Raw%%,%%No_Gene_Raw%%],
             backgroundColor: [
-              'rgb(0, 155, 0)',
-              'rgb(155, 0, 0)',
-              'rgb(0, 0, 155)',
-              'rgb(50, 155, 0)',
-              'rgb(155, 50, 0)',
-              'rgb(0, 50, 155)'
+              'rgb(228, 26, 28)',
+              'rgb(55, 126, 184)',
+              'rgb(77, 175, 74)',
+              'rgb(152, 78, 163)',
+              'rgb(255, 127, 0)',
+              'rgb(166, 86, 40)'
 
             ],
-            hoverOffset: 4
+            hoverOffset: 20
           }]
         };
         
@@ -109,9 +109,11 @@
             plugins: {
               legend: {
                 display: true,
+                position: "bottom",
+                align: "start",
                 labels : {
                   font: {
-                    size: 20
+                    size: 12
                   }
                 }
               },
