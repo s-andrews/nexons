@@ -226,24 +226,34 @@
         });
 
         const alignmentdata = {
-            labels: [
-                'Full Transcript Match',
-                'Partial Unique Transcript Match',
-                'Unique Gene Match',
-                'Multi Gene Match',
-                'No Gene Level Match'
-            ],
             datasets: [{
-                label: 'Read Fate Summary',
-                data: [%%Unique_Raw%%,%%Partial_Raw%%,%%Gene_Raw%%,%%Multi_Gene_Raw%%,%%No_Gene_Raw%%],
+                label: 'Unique Gene Match',
+                data: [%%Gene_Raw%%,%%Primary_Alignment_Raw%%-%%Gene_Raw%%],
+                backgroundColor: [
+                    'rgb(77, 175, 74)',
+                    'rgb(100,100,100)'
+                ]
+            },{
+                label: 'Partial Unique Transcript Match',
+                data: [%%Partial_Raw%%,%%Primary_Alignment_Raw%%-%%Partial_Raw%%],
+                backgroundColor: [
+                    'rgb(55, 126, 184)',
+                    'rgb(100,100,100)'
+                ]
+            },{
+                label: 'Full Transcript Match',
+                data: [%%Unique_Raw%%,%%Primary_Alignment_Raw%%-%%Unique_Raw%%],
                 backgroundColor: [
                     'rgb(228, 26, 28)',
-                    'rgb(55, 126, 184)',
-                    'rgb(77, 175, 74)',
+                    'rgb(100,100,100)'
+                ]
+            },{
+                label: 'Multi Gene Match',
+                data: [%%Multi_Gene_Raw%%,%%Primary_Alignment_Raw%%-%%Multi_Gene_Raw%%],
+                backgroundColor: [
                     'rgb(152, 78, 163)',
-                    'rgb(255, 127, 0)'
-                ],
-                hoverOffset: 20
+                    'rgb(100,100,100)'
+                ]
             }]
         };
 
