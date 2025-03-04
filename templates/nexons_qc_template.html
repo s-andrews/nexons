@@ -175,6 +175,23 @@
             </div>
         </div>
 
+        <div class="row text-center">
+            <div class="col-md-12 sectionhead">
+                <h2>Read Lengths</h2>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-2">
+            </div>
+
+            <div class="col-md-8">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="readlengthchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+
+
 
 
     </div>
@@ -279,5 +296,32 @@
                 }
             }
         });
+
+        const readlengthdata = {
+            labels: %%ReadLengthLabels%%,
+            datasets: [{
+                label: 'Read Lengths',
+                data: %%ReadLengthData%%,
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("readlengthchart", {
+            type: "line",
+            data: readlengthdata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+
 </script>
 </body>

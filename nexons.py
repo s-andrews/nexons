@@ -1,8 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import argparse
 import sys
 import pysam
 from pathlib import Path
+import json
 
 VERSION = "0.2.devel"
 RESOLUTION = 10000
@@ -31,11 +32,12 @@ def main():
     # Process each of the BAM files and add their data to the quantitations
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        outcomes,quantitations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+        read_lengths,outcomes,quantitations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
 
         results.append(quantitations)
- 
-        write_qc_report(bam_file,outcomes, options.outbase)
+
+        write_stats_file(bam_file,outcomes, read_lengths,options.outbase)
+        write_qc_report(bam_file,outcomes, read_lengths,options.outbase)
 
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
@@ -43,8 +45,20 @@ def main():
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
+def write_stats_file(bam_file, outcomes, read_lengths, outbase):
+    outfile = outbase+"_"+bam_file[:-4]+"_stats.txt"
+    output = {
+        "file": bam_file,
+        "outcomes":outcomes,
+        "read_lengths": read_lengths
+    }
 
-def write_qc_report(bam_file, outcomes, outbase):
+    with open(outfile,"wt",encoding="utf8") as out:
+        out.write(json.dumps(output))
+
+
+
+def write_qc_report(bam_file, outcomes, read_lengths, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -60,6 +74,18 @@ def write_qc_report(bam_file, outcomes, outbase):
         template_text = template_text.replace(f"%%{metric}%%",value)
         template_text = template_text.replace(f"%%{metric}_Raw%%",str(outcomes[metric]))
 
+
+    # We split the read lengths into separate lists for 
+    # labels and counts.
+    readlengthlabels = []
+    readlengthdata = []
+
+    for r in read_lengths:
+        readlengthlabels.append(r[0])
+        readlengthdata.append(r[1])
+    
+    template_text = template_text.replace("%%ReadLengthLabels%%",str(readlengthlabels))
+    template_text = template_text.replace("%%ReadLengthData%%",str(readlengthdata))
 
     with open(outfile,"wt",encoding="utf8") as out:
         out.write(template_text)
@@ -219,6 +245,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         "Unique":0 # Reads compatible with one transcript and matching completely
     }
 
+    read_lengths = [] # Counts for read lengths for primary alignments in 100bp bins
+
     samfile = pysam.AlignmentFile(bam_file, "rb")
 
     for read in samfile.fetch(until_eof=True):
@@ -236,6 +264,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             continue
 
         outcomes["Primary_Alignment"] += 1
+
+        length_bin = int(read.query_length / 100)
+        if len(read_lengths) < length_bin+1:
+            for bin in range(len(read_lengths),length_bin+1):
+                read_lengths.append([bin*100,0])
+
+        read_lengths[length_bin][1] += 1
 
         if not read.reference_name in index:
             # There are no features on this chromsome
@@ -348,7 +383,28 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     counts["unique"][(found_gene_id,found_transcript_id)] += 1
 
 
-    return (outcomes,counts)
+    # Our read lengths often have high outliers which skew the overall distribution.
+    # I'll go through the data until we've hit 5 empty slots - everything above that
+    # will be lumped together.
+    filtered_read_lengths = []
+    zero_count = 0
+    stop_adding = False
+    for bin in read_lengths:
+        if bin[1] == 0:
+            zero_count += 1
+        else:
+            zero_count = 0
+
+        if zero_count == 5:
+            stop_adding = True
+
+        if stop_adding:
+            filtered_read_lengths[-1][1] += bin[1]
+        else:
+            filtered_read_lengths.append(bin)
+
+
+    return (filtered_read_lengths,outcomes,counts)
 
 
 def gene_matches(exons,gene,flex,endflex):
