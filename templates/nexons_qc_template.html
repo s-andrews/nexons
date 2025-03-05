@@ -192,6 +192,32 @@
         </div>
 
 
+        <div class="row text-center">
+            <div class="col-md-12 sectionhead">
+                <h2>Exon Match Flexibility</h2>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-2">
+            </div>
+
+            <div class="col-md-8">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="innerflexchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-2">
+            </div>
+
+            <div class="col-md-8">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="endflexchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
 
 
     </div>
@@ -310,6 +336,59 @@
         new Chart("readlengthchart", {
             type: "line",
             data: readlengthdata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+
+        const innerflexdata = {
+            labels: %%InnerFlexLabels%%,
+            datasets: [{
+                label: 'Inner Exon Mismatch Distance',
+                data: %%InnerFlexData%%,
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("innerflexchart", {
+            type: "line",
+            data: innerflexdata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        const endflexdata = {
+            labels: %%EndFlexLabels%%,
+            datasets: [{
+                label: 'Transcript End Mismatch Distance',
+                data: %%EndFlexData%%,
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("endflexchart", {
+            type: "line",
+            data: endflexdata,
             options: {
                 responsive: true,
                 plugins: {

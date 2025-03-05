@@ -32,12 +32,12 @@ def main():
     # Process each of the BAM files and add their data to the quantitations
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        read_lengths,outcomes,quantitations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+        read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
 
         results.append(quantitations)
 
-        write_stats_file(bam_file,outcomes, read_lengths,options.outbase)
-        write_qc_report(bam_file,outcomes, read_lengths,options.outbase)
+        write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options.outbase)
+        write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options.outbase)
 
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
@@ -45,12 +45,14 @@ def main():
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
-def write_stats_file(bam_file, outcomes, read_lengths, outbase):
+def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_stats.txt"
     output = {
         "file": bam_file,
         "outcomes":outcomes,
-        "read_lengths": read_lengths
+        "read_lengths": read_lengths,
+        "end_flex": endflex,
+        "inner_flex": innerflex
     }
 
     with open(outfile,"wt",encoding="utf8") as out:
@@ -58,7 +60,7 @@ def write_stats_file(bam_file, outcomes, read_lengths, outbase):
 
 
 
-def write_qc_report(bam_file, outcomes, read_lengths, outbase):
+def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -86,6 +88,30 @@ def write_qc_report(bam_file, outcomes, read_lengths, outbase):
     
     template_text = template_text.replace("%%ReadLengthLabels%%",str(readlengthlabels))
     template_text = template_text.replace("%%ReadLengthData%%",str(readlengthdata))
+
+
+    # We need to assemble the inner and end flexibility data too
+    innerflexlabels = []
+    innerflexdata = []
+
+    for label,value in innerflex.items():
+        innerflexlabels.append(label)
+        innerflexdata.append(value)
+    
+    template_text = template_text.replace("%%InnerFlexLabels%%",str(innerflexlabels))
+    template_text = template_text.replace("%%InnerFlexData%%",str(innerflexdata))
+
+    endflexlabels = []
+    endflexdata = []
+
+    for label,value in endflex.items():
+        endflexlabels.append(label)
+        endflexdata.append(value)
+    
+    template_text = template_text.replace("%%EndFlexLabels%%",str(endflexlabels))
+    template_text = template_text.replace("%%EndFlexData%%",str(endflexdata))
+
+
 
     with open(outfile,"wt",encoding="utf8") as out:
         out.write(template_text)
@@ -247,6 +273,18 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
     read_lengths = [] # Counts for read lengths for primary alignments in 100bp bins
 
+    # We'll aggregate the observed differences between the exon ends in the reads and
+    # the models.
+    end_flex_observations = {}
+    inner_flex_observations = {}
+
+    for i in range(-flex,flex+1):
+        inner_flex_observations[i] = 0
+
+    for i in range(-endflex,endflex+1):
+        end_flex_observations[i] = 0
+
+
     samfile = pysam.AlignmentFile(bam_file, "rb")
 
     for read in samfile.fetch(until_eof=True):
@@ -313,6 +351,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         found_gene_id = None
         found_transcript_id = None
         found_status = None
+        best_endflex = None
+        best_innerflex = None
 
         for gene_id in possible_genes:
             # Transcript ID will be the ID of the matched transcript.
@@ -320,7 +360,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             # 
             # unique, partial, multi 
 
-            transcript_id,status = gene_matches(exons,genes[gene_id],flex,endflex)
+            transcript_id,status,observed_endflex, observed_innerflex = gene_matches(exons,genes[gene_id],flex,endflex)
             if transcript_id is not None:
                 if status=="unique":
                     # We're done here
@@ -328,6 +368,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_gene_id = gene_id
                     found_transcript_id = transcript_id
                     found_status = "unique"
+                    best_endflex = observed_endflex
+                    best_innerflex = observed_innerflex
                     break
 
                 else:
@@ -348,6 +390,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_transcript_id = transcript_id
                     found_gene_id = gene_id
                     found_status = status
+                    best_endflex = observed_endflex
+                    best_innerflex = observed_innerflex
                     continue
 
          # Now we can increase the appropriate counts
@@ -356,6 +400,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
         else:
             # There is a hit
+
+            # We can add in the flex values to the total
+            for i in best_endflex:
+                end_flex_observations[i] += 1
+
+            for i in best_innerflex:
+                inner_flex_observations[i] += 1
 
             # We always increment the gene
             outcomes["Gene"] += 1
@@ -404,7 +455,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             filtered_read_lengths.append(bin)
 
 
-    return (filtered_read_lengths,outcomes,counts)
+    return (filtered_read_lengths,outcomes,counts,end_flex_observations, inner_flex_observations)
 
 
 def gene_matches(exons,gene,flex,endflex):
@@ -431,25 +482,32 @@ def gene_matches(exons,gene,flex,endflex):
 
     matched_transcript = None
     status = None
+    best_endflex = None
+    best_innerflex = None
 
     for transcript in gene["transcripts"].values():
 
-        success, partial = match_exons(exons, transcript["exons"], flex, endflex)
+        success, partial, endflex_observed, innerflex_observed = match_exons(exons, transcript["exons"], flex, endflex)
 
         if success and not partial:
             # It's a full match - we can stop looking
             matched_transcript = transcript["id"]
             status = "unique"
+            best_endflex = endflex_observed
+            best_innerflex = innerflex_observed
             break
 
         if success and partial:
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
                 status = "partial"
+                best_endflex = endflex_observed
+                best_innerflex = innerflex_observed
+
             else:
                 status = "multi"
 
-    return (matched_transcript,status)
+    return (matched_transcript,status,best_endflex,best_innerflex)
 
 
 def match_exons(exons,transcript,flex,endflex):
@@ -479,51 +537,48 @@ def match_exons(exons,transcript,flex,endflex):
         current_read_exon = 0
         last_transcript_exon = len(transcript)-1
         last_read_exon = len(exons)-1
+        end_flex_values = []
+        inner_flex_values = []
 
         while True:
 
             # We'll step through the different exons of the read to
             # try to match them.
 
-            min_start = exons[current_read_exon][0]
-            max_start = exons[current_read_exon][0]
+            this_start = exons[current_read_exon][0]
+            this_end = exons[current_read_exon][1]
 
-            min_end = exons[current_read_exon][1]
-            max_end = exons[current_read_exon][1]
+            this_start_flex = flex
+            this_end_flex = flex
 
 
             # Now we'll add the flexbility which is given to this exon
             if current_transcript_exon == 0:
-                # We get more flex on the start
-                min_start -= endflex
-                max_start += endflex
-
-            else:
-                min_start -= flex
-                max_start += flex
-
-            if max_start > exons[current_read_exon][1]:
-                max_start = exons[current_read_exon][1]
-
+                this_start_flex = endflex
             
             if current_transcript_exon == last_transcript_exon:
-                min_end -= endflex
-                max_end += endflex
-
-            else:
-                min_end -= flex
-                max_end += flex
-
-            if min_end < exons[current_read_exon][0]:
-                min_end = exons[current_read_exon][0]
-
+                this_end_flex = endflex
 
             # See if we match this exon
-            start_matches = transcript[current_transcript_exon][0] >= min_start and transcript[current_transcript_exon][0] <= max_start
-            end_matches = transcript[current_transcript_exon][1] <= max_end and transcript[current_transcript_exon][1] >= min_end
+            start_mismatch = transcript[current_transcript_exon][0] - this_start
+            end_mismatch = transcript[current_transcript_exon][1] - this_end
+            start_matches = abs(start_mismatch) <= this_start_flex
+            end_matches = abs(end_mismatch) <= this_end_flex
 
             if start_matches and end_matches:
                 # This exon matches
+
+                # Add the mismatch values to the overall pool
+                if current_transcript_exon == 0:
+                    end_flex_values.append(start_mismatch)
+                else:
+                    inner_flex_values.append(start_mismatch)
+
+                            
+                if current_transcript_exon == last_transcript_exon:
+                    end_flex_values.append(end_mismatch)
+                else:
+                    inner_flex_values.append(end_mismatch)
 
                 if current_read_exon == last_read_exon:
                     # We're at the end of the match
@@ -591,7 +646,7 @@ def match_exons(exons,transcript,flex,endflex):
 
                 
             # If we're a single exon read then both start and end could be within the exon
-            if len(exons) == 1 and max_start < transcript[current_transcript_exon][1] and min_end > transcript[current_transcript_exon][0]:
+            if len(exons) == 1 and exons[0][0] < transcript[current_transcript_exon][1] and exons[0][1] > transcript[current_transcript_exon][0]:
                 full_match = False
                 break 
 
@@ -599,7 +654,7 @@ def match_exons(exons,transcript,flex,endflex):
             matches = False
             break
 
-        return (matches, not full_match)
+        return (matches, not full_match, end_flex_values, inner_flex_values)
 
 
 def get_possible_genes(index, chr, start, end, direction):
