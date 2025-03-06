@@ -945,7 +945,7 @@ def get_options():
         "--maxtsl",
         help="Maximum transcript support level to analyse",
         type=int,
-        default=1
+        default=2
     )
 
     parser.add_argument(
