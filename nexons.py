@@ -817,15 +817,6 @@ def read_gtf(gtf_file, max_tsl):
             transcript_name=None
             transcript_support_level=None
 
-            # We have a lot of primary transcripts with no annotated TSL so we're going to 
-            # force the issue in these cases.
-            good_tags = ["MANE_Select","Ensembl_Canonical","gencode_primary","gencode_basic"]
-            for good_tag in good_tags:
-                if good_tag in sections[8]:
-                    transcript_support_level = 1
-                    break
-
-
             for comment in comments:
                 if comment.strip().startswith("gene_id"):
                     gene_id=comment[8:].replace('"','').strip()
@@ -847,6 +838,16 @@ def read_gtf(gtf_file, max_tsl):
                         warn(f"Ignoring non-numeric TSL value {temp_tsl}")
                     else:
                         transcript_support_level = int(temp_tsl)
+
+            # We have a lot of primary transcripts with no annotated TSL so we're going to 
+            # force the issue in these cases.  Even where there is a TSL we're overwriting
+            # to keep these genes
+            good_tags = ["MANE_Select","Ensembl_Canonical","gencode_primary","gencode_basic"]
+            for good_tag in good_tags:
+                if good_tag in sections[8]:
+                    transcript_support_level = 1
+                    break
+
 
                     
             if gene_id is None and gene_name is None:
