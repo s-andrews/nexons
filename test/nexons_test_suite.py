@@ -14,11 +14,17 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from nexons import get_possible_genes, match_exons
+from nexons import get_possible_genes, match_exons, gene_matches
 
 
 def main():
+    print("TESTING EXON MATCHING\n---------------------")
     test_exon_matching()
+
+    print("\nTESTING GENE MATCHING\n---------------------")
+    test_gene_matching()
+
+    print("\nTESTING FEATURE RETRIEVAL\n-------------------------")
     test_feature_retrieval()
 
 def failed(message):
@@ -26,6 +32,55 @@ def failed(message):
 
 def passed(message):
     print("PASSED: "+message)
+
+
+def test_gene_matching():
+    gene = {'name': 'TEST', 'id': 'ENSG00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'transcripts': {'ENST00000000001': {'name': 'TEST-101', 'id': 'ENST00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'exons': [[10,100], [600,800]]}, 'ENST00000000002': {'name': 'TEST-102', 'id': 'ENST00000000002', 'chrom': '1', 'start': 10, 'end': 500, 'strand': '+', 'exons': [[10, 100], [200,500]]}}}
+
+    # Unique hit
+    answer = gene_matches([[10,100],[200,500]],gene,0,0)
+    if not answer[0] is not None:
+        failed("Unique hit not reporting transcript")
+    elif not answer[0] == "ENST00000000002":
+        failed("Unique hit not reporting correct transcript")
+    elif answer[1] != "unique":
+        failed("Unique hit not repoted as unique")
+    else:
+        passed("Unique gene match OK")
+
+
+    # Partial hit
+    answer = gene_matches([[10,100],[200,300]],gene,0,0)
+    if not answer[0] is not None:
+        failed("Partial hit not reporting transcript")
+    elif not answer[0] == "ENST00000000002":
+        failed("Partial hit not reporting correct transcript")
+    elif answer[1] != "partial":
+        failed("Partial hit not repoted as partial")
+    else:
+        passed("Partial gene match OK")
+
+
+    # Multi hit - should match multiple transcripts
+    answer = gene_matches([[10,100]],gene,0,0)
+    if not answer[0] is not None:
+        failed("Multi hit not reporting transcript")
+    elif answer[1] != "multi":
+        failed("Multi hit not repoted as multi")
+    else:
+        passed("Multi transcript match OK")
+
+
+    # Intron match
+    answer = gene_matches([[500,600]],gene,0,0)
+    if answer[0] is not None:
+        failed("Intron matching incorrectly reporting transcript")
+    elif answer[1] != "intron":
+        failed("Intron match not repoted as intron")
+    else:
+        passed("Intron match OK")
+
+
 
 
 def test_exon_matching():
@@ -137,9 +192,31 @@ def test_exon_matching():
 
     else:
         passed("Internal exon match OK")
-        
 
-    pass
+
+    # Intron match
+    answer = match_exons([[25,28]],[[10,20],[30,40],[50,60]],0,0)
+    if answer[0]:
+        failed("Intron match reported as properly matching")
+
+    elif answer[2]:
+        failed("Endflex reported for intron match")
+
+    elif answer[3]:
+        failed("Innerflex reported for intron match")
+
+    else:
+        passed("Intron match OK")
+
+
+    # Mismatch
+    answer = match_exons([[100,150]],[[10,20],[30,40],[50,60]],0,0)
+    if answer[0]:
+        failed("Mismatch reported as matching")
+        
+    else:
+        passed("Mismatch exons OK")
+        
 
 
 def test_feature_retrieval():
