@@ -6,8 +6,11 @@ from pathlib import Path
 import json
 
 VERSION = "0.2.devel"
-RESOLUTION = 10000
 
+# This is the resolution of the feature indexing - we split the genome
+# into bins of this size and use these to quickly find the features we
+# need for a given read.
+RESOLUTION = 10000
 
 options = argparse.Namespace(verbose=False, quiet=True, report_all=False)
 
@@ -560,8 +563,8 @@ def match_exons(exons,transcript,flex,endflex):
                 this_end_flex = endflex
 
             # See if we match this exon
-            start_mismatch = transcript[current_transcript_exon][0] - this_start
-            end_mismatch = transcript[current_transcript_exon][1] - this_end
+            start_mismatch =  this_start - transcript[current_transcript_exon][0]
+            end_mismatch =  this_end - transcript[current_transcript_exon][1]
             start_matches = abs(start_mismatch) <= this_start_flex
             end_matches = abs(end_mismatch) <= this_end_flex
 
