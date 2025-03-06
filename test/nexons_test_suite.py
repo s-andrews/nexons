@@ -28,10 +28,10 @@ def main():
     test_feature_retrieval()
 
 def failed(message):
-    print("FAIL: "+message, file=sys.stderr)
+    print('\033[91m'+"FAILED: "+'\033[0m'+message, file=sys.stderr)
 
 def passed(message):
-    print("PASSED: "+message)
+    print('\033[92m'+"PASSED: "+'\033[0m'+message)
 
 
 def test_gene_matching():
@@ -223,7 +223,6 @@ def test_feature_retrieval():
 
     # TSL Filtering
     all_genes_tsl1 = read_gtf(Path(__file__).parent/"test.gtf",1)
-    breakpoint()
     if not len(all_genes_tsl1["ENSG00000163635"]["transcripts"].keys()) == 8:
         failed("ENSG00000163635 at TSL1 didn't have 8 transcripts")
     else:
