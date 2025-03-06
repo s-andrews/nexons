@@ -393,9 +393,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_transcript_id = transcript_id
                     found_gene_id = gene_id
                     if status=="partial":
-                        found_status == "partial"
+                        found_status = "partial"
                     elif status=="multi":
-                        found_status == "gene"
+                        found_status = "gene"
                     else:
                         raise Exception("Unexpected status "+status)
                     best_endflex = observed_endflex
