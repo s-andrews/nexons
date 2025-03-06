@@ -14,7 +14,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from nexons import get_possible_genes, match_exons, gene_matches
+from nexons import get_possible_genes, match_exons, gene_matches,read_gtf, build_index
 
 
 def main():
@@ -218,9 +218,73 @@ def test_exon_matching():
         passed("Mismatch exons OK")
         
 
-
 def test_feature_retrieval():
-    pass
+    # test.gtf is human GRCh38v113 chr3 between 63723373-64479723
+
+    # TSL Filtering
+    all_genes_tsl1 = read_gtf(Path(__file__).parent/"test.gtf",1)
+    breakpoint()
+    if not len(all_genes_tsl1["ENSG00000163635"]["transcripts"].keys()) == 8:
+        failed("ENSG00000163635 at TSL1 didn't have 8 transcripts")
+    else:
+        passed("TSL1 Filtering OK")
+
+    all_genes_tsl5 = read_gtf(Path(__file__).parent/"test.gtf",5)    
+    if not len(all_genes_tsl5["ENSG00000163635"]["transcripts"].keys()) == 13:
+        failed("ENSG00000163635 at TSL5 didn't have 13 transcripts")
+    else:
+        passed("TSL5 Filtering OK")
+
+    index = build_index(all_genes_tsl1)
+    index5 = build_index(all_genes_tsl5)
+
+    # Single fetch
+    answer = get_possible_genes(index,"3",64100000,64200000,"A")
+    if not len(answer) == 1:
+        failed("No gene found for single fetch")
+    elif [x for x in answer][0] != 'ENSG00000163637':
+        failed("Wrong gene retrieved for single fetch")
+    else:
+        passed("Simple gene fetch OK")
+
+    # Directional fetch
+    answer = get_possible_genes(index,"3",64100000,64200000,"R")
+    if not len(answer) == 1:
+        failed("No gene found for directional fetch")
+    elif [x for x in answer][0] != 'ENSG00000163637':
+        failed("Wrong gene retrieved for directional fetch")
+    else:
+        passed("Directional gene fetch OK")
+
+    # Wrong Directional fetch
+    answer = get_possible_genes(index,"3",64100000,64200000,"F")
+    if not len(answer) == 0:
+        failed("Incorrect hit found for wrong directional fetch")
+    else:
+        passed("Wrong directional gene fetch OK")
+
+    # Multiple Fetch
+    answer = get_possible_genes(index5,"3",64190000,64190001,"A")
+    if not len(answer) == 2:
+        failed("Didn't find two hits for multiple fetch")
+    else:
+        passed("Multiple fetch OK")
+    
+    # Exact start
+    answer = get_possible_genes(index,"3",63819299,63819299,"F")
+    if not len(answer) == 1:
+        failed("No gene found for exact start fetch")
+    else:
+        passed("Exact start fetch OK")
+
+    # Exact end
+    answer = get_possible_genes(index,"3",64200965,64200965,"F")
+    if not len(answer) == 1:
+        failed("No gene found for exact end fetch")
+    else:
+        passed("Exact end fetch OK")
+
+
 
 
 if __name__ == "__main__":
