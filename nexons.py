@@ -344,7 +344,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         # We want the surrounding genes.  We shorten the read by the amount of 
         # endflex so that we still find genes which surround us if we don't 
         # have perfectly positioned ends.
-        possible_genes = get_possible_genes(index, read.reference_name, min(exons[0][0]+endflex, exons[0][1]), max(exons[-1][1]-endflex, exons[-1][0]), gene_direction)
+        breakpoint()
+        possible_genes = get_possible_genes(index, read.reference_name, min(read.reference_start+endflex,read.reference_end), max(read.reference_end-endflex,read.reference_start), gene_direction)
 
         if not possible_genes:
             outcomes["No_Gene"] += 1
@@ -381,9 +382,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     # gene but we could also hit another gene which
                     # would then mean that we don't assign this read
                     # at all.
-                    if found_gene_id is not None:
+                    if found_transcript_id is not None:
                         # We're done - we can't assign this at all
-                        outcomes["Multi_Gene"] += 1
+                        status="multi"
                         found_hit = False
                         break
 
@@ -397,9 +398,41 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     best_innerflex = observed_innerflex
                     continue
 
-         # Now we can increase the appropriate counts
-        if not found_hit:
+            elif status=="intron":
+                if found_hit:
+                    # We found a proper hit elsewhere so this
+                    # one is ignored
+                    continue
+                elif found_gene_id is None:
+                    # We'll keep hold of this for now but if we 
+                    # find a proper hit it will replace this, and 
+                    # if we find another gene hit then this becomes
+                    # a multi-hit
+                    found_gene_id = gene_id
+                    found_status = status
+                else:
+                    # There is another gene level match so we leave
+                    # that alone but set the status to multi.  We'll
+                    # keep looking though because there might be a 
+                    # proper hit elsewhere
+                    found_status = "multi"
+
+
+        # Now we can increase the appropriate counts
+        if not found_hit and found_status is None:
             outcomes["No_Hit"] += 1
+
+        elif not found_hit and status == "intron":
+            # We have only a gene level hit
+            outcomes["Gene"] += 1
+            if not found_gene_id in counts["gene"]:
+                counts["gene"][found_gene_id] = 1
+            else:
+                counts["gene"][found_gene_id] += 1
+
+
+        elif status == "multi":
+            outcomes["Multi_Gene"] += 1
 
         else:
             # There is a hit
@@ -509,6 +542,14 @@ def gene_matches(exons,gene,flex,endflex):
 
             else:
                 status = "multi"
+
+    # If we get here and we've not matched any transcripts we could still match
+    # the gene as a whole, either from a different splicing pattern, or from
+    # being immature, or contained within an intron.
+    if matched_transcript is None:
+        if gene["start"]-endflex <= exons[0][0] and gene["end"]+endflex >= exons[-1][1]:
+            # The read sits within the gene
+            status="intron"
 
     return (matched_transcript,status,best_endflex,best_innerflex)
 
@@ -775,6 +816,15 @@ def read_gtf(gtf_file, max_tsl):
             transcript_id=None
             transcript_name=None
             transcript_support_level=None
+
+            # We have a lot of primary transcripts with no annotated TSL so we're going to 
+            # force the issue in these cases.
+            good_tags = ["MANE_Select","Ensembl_Canonical","gencode_primary","gencode_basic"]
+            for good_tag in good_tags:
+                if good_tag in sections[8]:
+                    transcript_support_level = 1
+                    break
+
 
             for comment in comments:
                 if comment.strip().startswith("gene_id"):
