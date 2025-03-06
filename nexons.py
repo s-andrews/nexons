@@ -344,7 +344,6 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         # We want the surrounding genes.  We shorten the read by the amount of 
         # endflex so that we still find genes which surround us if we don't 
         # have perfectly positioned ends.
-        breakpoint()
         possible_genes = get_possible_genes(index, read.reference_name, min(read.reference_start+endflex,read.reference_end), max(read.reference_end-endflex,read.reference_start), gene_direction)
 
         if not possible_genes:
@@ -384,7 +383,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     # at all.
                     if found_transcript_id is not None:
                         # We're done - we can't assign this at all
-                        status="multi"
+                        found_status="multi"
                         found_hit = False
                         break
 
@@ -393,7 +392,12 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_hit = True
                     found_transcript_id = transcript_id
                     found_gene_id = gene_id
-                    found_status = status
+                    if status=="partial":
+                        found_status == "partial"
+                    elif status=="multi":
+                        found_status == "gene"
+                    else:
+                        raise Exception("Unexpected status "+status)
                     best_endflex = observed_endflex
                     best_innerflex = observed_innerflex
                     continue
@@ -431,7 +435,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 counts["gene"][found_gene_id] += 1
 
 
-        elif status == "multi":
+        elif found_status == "multi":
             outcomes["Multi_Gene"] += 1
 
         else:
