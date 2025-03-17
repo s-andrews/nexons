@@ -21,6 +21,10 @@
             margin-left: auto;
             margin-right: auto;
         }
+        #options td{
+            font-family: monospace;
+            text-align: left;
+        }
     </style>
 
     <title>Nexons QC Report: %%BAMFILE%% </title>
@@ -92,6 +96,27 @@
             </div>
             <div class="col-md-8 text-center align-middle">
                 <h2>%%BAMFILE%% </h2>
+            </div>
+        </div>
+
+        <div class="row text-center">
+            <div class="col-md-12 sectionhead">
+                <h2>Nexons Options</h2>
+            </div>
+        </div>
+
+
+        <div class="row text-center">
+            <div class="col-md-4"></div>
+            <div class="col-md-4">
+                <table id="options" class="table table-sm">
+                    <tr>
+                        <th>Option</th>
+                        <th>Value</th>
+                    </tr>
+
+                    %%OPTIONS%%
+                </table>
             </div>
         </div>
 

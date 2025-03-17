@@ -4,6 +4,7 @@ import sys
 import pysam
 from pathlib import Path
 import json
+import html
 
 VERSION = "0.2.devel"
 
@@ -40,7 +41,7 @@ def main():
         results.append(quantitations)
 
         write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options.outbase)
-        write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options.outbase)
+        write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options, options.outbase)
 
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
@@ -63,7 +64,7 @@ def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, outba
 
 
 
-def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, outbase):
+def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, options, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -73,6 +74,19 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, outbas
             template_text += line
 
     template_text = template_text.replace("%%BAMFILE%%",bam_file)
+
+
+    optionshtml = "<tr><td>Nexons version</td><td>"+VERSION+"</td></tr>\n"
+
+    options_to_ignore = ("bam","verbose","quiet","suppress_warnings")
+
+    for option in vars(options):
+        if option in options_to_ignore:
+            continue
+        optionshtml += "<tr><td>"+option+"</td><td>"+html.escape(str(vars(options)[option]))+"</td></tr>\n"
+
+    template_text = template_text.replace("%%OPTIONS%%",optionshtml)
+
 
     for metric in outcomes:
         value = f"{outcomes[metric]:,d}"
