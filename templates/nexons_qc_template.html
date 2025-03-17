@@ -205,6 +205,37 @@
 
         <div class="row text-center">
             <div class="col-md-12 sectionhead">
+                <h2>Alignment Directionality</h2>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-2">
+            </div>
+
+            <div class="col-md-4">
+                <table class="table">
+                    <tbody>
+                        <tr>
+                            <th>Same Strand Matches</th>
+                            <td>%%Same_Strand_Hit%%</td>
+                        </tr>
+                        <tr>
+                            <th>Opposing Strand Matches</th>
+                            <td>%%Opposing_Strand_Hit%%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-4">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="strandchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="row text-center">
+            <div class="col-md-12 sectionhead">
                 <h2>Read Lengths</h2>
             </div>
         </div>
@@ -437,6 +468,46 @@
                 }
             }
         });
+
+        const stranddata = {
+            labels: [
+                'Same Strand Alignment',
+                'Opposite Strand Alignment'
+            ],
+            datasets: [{
+                label: 'Alignment Strand',
+                data: [%%Same_Strand_Hit_Raw%%,%%Opposing_Strand_Hit_Raw%%],
+                backgroundColor: [
+                    'rgb(228, 26, 28)',
+                    'rgb(55, 126, 184)'
+                ],
+                hoverOffset: 20
+            }]
+        };
+
+        new Chart("strandchart", {
+            type: "doughnut",
+            data: stranddata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "bottom",
+                        align: "start",
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    title: {
+                        display: false
+                    }
+                }
+            }
+        });
+
 
 </script>
 </body>

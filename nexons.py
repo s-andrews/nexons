@@ -285,7 +285,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         "Gene":0, # Reads quantitated at the gene level
         "Multi_Gene":0, # Reads compatible with more than one gene
         "Partial":0, # Reads compatible with one transcript, but not covering all of it
-        "Unique":0 # Reads compatible with one transcript and matching completely
+        "Unique":0, # Reads compatible with one transcript and matching completely
+        "Same_Strand_Hit": 0, # Full or partial hit where the direction of the hit and gene match 
+        "Opposing_Strand_Hit": 0, # Full or partial hit where the direction of the hit and gene are opposite 
     }
 
     read_lengths = [] # Counts for read lengths for primary alignments in 100bp bins
@@ -387,6 +389,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_status = "unique"
                     best_endflex = observed_endflex
                     best_innerflex = observed_innerflex
+
+                    if read.is_reverse and genes[found_gene_id]["strand"] == "-":
+                        outcomes["Same_Strand_Hit"] += 1
+                    elif (not read.is_reverse) and genes[found_gene_id]["strand"] == "+":
+                        outcomes["Same_Strand_Hit"] += 1
+                    else:
+                        outcomes["Opposing_Strand_Hit"] += 1
                     break
 
                 else:
@@ -454,6 +463,15 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
         else:
             # There is a hit
+
+            # Assign the directionality
+            if read.is_reverse and genes[found_gene_id]["strand"] == "-":
+                outcomes["Same_Strand_Hit"] += 1
+            elif (not read.is_reverse) and genes[found_gene_id]["strand"] == "+":
+                outcomes["Same_Strand_Hit"] += 1
+            else:
+                outcomes["Opposing_Strand_Hit"] += 1
+
 
             # We can add in the flex values to the total
             for i in best_endflex:
