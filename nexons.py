@@ -5,6 +5,7 @@ import pysam
 from pathlib import Path
 import json
 import html
+import math
 
 VERSION = "0.2.devel"
 
@@ -36,12 +37,14 @@ def main():
     # Process each of the BAM files and add their data to the quantitations
     for count,bam_file in enumerate(options.bam):
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
-        read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+        read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations,coverage = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
+
+        breakpoint()
 
         results.append(quantitations)
 
-        write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options.outbase)
-        write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, options, options.outbase)
+        write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
+        write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
 
         log(f"Summary for {bam_file}:")
         for metric in outcomes:
@@ -49,14 +52,15 @@ def main():
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
-def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, outbase):
+def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_stats.txt"
     output = {
         "file": bam_file,
         "outcomes":outcomes,
         "read_lengths": read_lengths,
         "end_flex": endflex,
-        "inner_flex": innerflex
+        "inner_flex": innerflex,
+        "coverage": coverage
     }
 
     with open(outfile,"wt",encoding="utf8") as out:
@@ -64,7 +68,7 @@ def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, outba
 
 
 
-def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, options, outbase):
+def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, options, outbase):
     outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -292,6 +296,11 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
     read_lengths = [] # Counts for read lengths for primary alignments in 100bp bins
 
+    read_coverage_percentiles = []
+
+    for _ in range(101):
+        read_coverage_percentiles.append(0)
+
     # We'll aggregate the observed differences between the exon ends in the reads and
     # the models.
     end_flex_observations = {}
@@ -372,6 +381,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
         found_status = None
         best_endflex = None
         best_innerflex = None
+        best_start_percentile = None
+        best_end_percentile = None
 
         for gene_id in possible_genes:
             # Transcript ID will be the ID of the matched transcript.
@@ -379,7 +390,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             # 
             # unique, partial, multi 
 
-            transcript_id,status,observed_endflex, observed_innerflex = gene_matches(exons,genes[gene_id],flex,endflex)
+            transcript_id,status,observed_endflex, observed_innerflex, start_percent, end_percent = gene_matches(exons,genes[gene_id],flex,endflex)
             if transcript_id is not None:
                 if status=="unique":
                     # We're done here
@@ -389,6 +400,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     found_status = "unique"
                     best_endflex = observed_endflex
                     best_innerflex = observed_innerflex
+                    best_start_percentile = start_percent
+                    best_end_percentile = end_percent
 
                     if read.is_reverse and genes[found_gene_id]["strand"] == "-":
                         outcomes["Same_Strand_Hit"] += 1
@@ -423,6 +436,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                         raise Exception("Unexpected status "+status)
                     best_endflex = observed_endflex
                     best_innerflex = observed_innerflex
+                    best_start_percentile = start_percent
+                    best_end_percentile = end_percent
                     continue
 
             elif status=="intron":
@@ -472,6 +487,17 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             else:
                 outcomes["Opposing_Strand_Hit"] += 1
 
+            # Add the read percentiles
+            if genes[found_gene_id]["strand"] == "+":
+                used_start_percentile = math.floor(best_start_percentile)
+                used_end_percentile = math.ceil(best_end_percentile)
+                for i in range(used_start_percentile,used_end_percentile+1):
+                    read_coverage_percentiles[i] += 1
+            else:
+                used_start_percentile = math.floor(100-best_end_percentile)
+                used_end_percentile = math.ceil(100-best_start_percentile)
+                for i in range(used_start_percentile,used_end_percentile+1):
+                    read_coverage_percentiles[i] += 1
 
             # We can add in the flex values to the total
             for i in best_endflex:
@@ -527,7 +553,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             filtered_read_lengths.append(bin)
 
 
-    return (filtered_read_lengths,outcomes,counts,end_flex_observations, inner_flex_observations)
+    return (filtered_read_lengths,outcomes,counts,end_flex_observations, inner_flex_observations, read_coverage_percentiles)
 
 
 def gene_matches(exons,gene,flex,endflex):
@@ -554,12 +580,14 @@ def gene_matches(exons,gene,flex,endflex):
 
     matched_transcript = None
     status = None
+    best_start_percentile = 0
+    best_end_percentile = 0
     best_endflex = None
     best_innerflex = None
 
     for transcript in gene["transcripts"].values():
 
-        success, partial, endflex_observed, innerflex_observed = match_exons(exons, transcript["exons"], flex, endflex)
+        success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
 
         if success and not partial:
             # It's a full match - we can stop looking
@@ -567,6 +595,8 @@ def gene_matches(exons,gene,flex,endflex):
             status = "unique"
             best_endflex = endflex_observed
             best_innerflex = innerflex_observed
+            best_start_percentile = start_percent
+            best_end_percentile = end_percent
             break
 
         if success and partial:
@@ -575,6 +605,8 @@ def gene_matches(exons,gene,flex,endflex):
                 status = "partial"
                 best_endflex = endflex_observed
                 best_innerflex = innerflex_observed
+                best_start_percentile = start_percent
+                best_end_percentile = end_percent
 
             else:
                 status = "multi"
@@ -587,7 +619,7 @@ def gene_matches(exons,gene,flex,endflex):
             # The read sits within the gene
             status="intron"
 
-    return (matched_transcript,status,best_endflex,best_innerflex)
+    return (matched_transcript,status,best_endflex,best_innerflex,best_start_percentile,best_end_percentile)
 
 
 def match_exons(exons,transcript,flex,endflex):
@@ -610,8 +642,15 @@ def match_exons(exons,transcript,flex,endflex):
         # end of the transcript (with endflex) or we'll run out within
         # an exon, in which case we'll be a partial match
 
+        total_transcript_len = 0
+        for exon in transcript:
+            total_transcript_len += (1+exon[1] - exon[0])
+
         full_match = True
         matches = True
+
+        start_percent = None
+        end_percent = None
 
         current_transcript_exon = 0
         current_read_exon = 0
@@ -619,6 +658,8 @@ def match_exons(exons,transcript,flex,endflex):
         last_read_exon = len(exons)-1
         end_flex_values = []
         inner_flex_values = []
+
+        length_seen_so_far = 0
 
         while True:
 
@@ -651,12 +692,23 @@ def match_exons(exons,transcript,flex,endflex):
                 # Add the mismatch values to the overall pool
                 if current_transcript_exon == 0:
                     end_flex_values.append(start_mismatch)
+                    # Add the start percentage to the results
+                    start_percent = length_seen_so_far
+                    if start_mismatch > 0: # If we're starting into the exon then add that value
+                        start_percent += start_mismatch
+
+                    start_percent = 100 * start_percent/total_transcript_len
                 else:
                     inner_flex_values.append(start_mismatch)
 
                             
                 if current_transcript_exon == last_transcript_exon:
                     end_flex_values.append(end_mismatch)
+                    # Add the end percentage to the results
+                    end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                    if end_mismatch < 0:
+                        end_percent += end_mismatch
+                    end_percent = 100 * end_percent/total_transcript_len
                 else:
                     inner_flex_values.append(end_mismatch)
 
@@ -666,6 +718,13 @@ def match_exons(exons,transcript,flex,endflex):
                         # We've matched but not to the end of the transcript
                         full_match = False
                     
+                        # Add the end percentage to the results
+                        end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                        if end_mismatch < 0:
+                            end_percent += end_mismatch
+                        end_percent = 100 * end_percent/total_transcript_len
+
+
                     # We don't need to look any further
                     break
 
@@ -678,8 +737,17 @@ def match_exons(exons,transcript,flex,endflex):
                         break
 
                 # We matched and there's more read exons left. 
+                start_percent = length_seen_so_far
+                if start_mismatch > 0: # If we're starting into the exon then add that value
+                    start_percent += start_mismatch
+
+                start_percent = 100 * start_percent/total_transcript_len
+
+                length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
+
                 current_read_exon += 1
                 current_transcript_exon += 1
+
                 continue
 
             # Not everything matches.
@@ -688,6 +756,7 @@ def match_exons(exons,transcript,flex,endflex):
             if current_read_exon == 0 and exons[0][0] > transcript[current_transcript_exon][1]:
                 # We can just try the next transcript exon if there is one
                 if current_transcript_exon < last_transcript_exon:
+                    length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
                     current_transcript_exon += 1
                     continue
                 else:
@@ -707,6 +776,15 @@ def match_exons(exons,transcript,flex,endflex):
 
                     full_match = False
                     current_read_exon += 1
+
+                    start_percent = length_seen_so_far
+                    if start_mismatch > 0: # If we're starting into the exon then add that value
+                        start_percent += start_mismatch
+
+                    start_percent = 100 * start_percent/total_transcript_len
+
+
+                    length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
                     current_transcript_exon += 1
                     continue
                 else:
@@ -718,6 +796,14 @@ def match_exons(exons,transcript,flex,endflex):
             if current_read_exon == last_read_exon and len(exons) > 1:
                 if start_matches and exons[current_read_exon][1] >= transcript[current_transcript_exon][0] and exons[current_read_exon][1] <= transcript[current_transcript_exon][1]:
                     full_match = False
+
+                    end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                    if end_mismatch < 0:
+                        end_percent += end_mismatch
+                    end_percent = 100 * end_percent/total_transcript_len
+
+
+
                     # This is the last exon so we can stop looking
                     break
                 else:
@@ -728,13 +814,25 @@ def match_exons(exons,transcript,flex,endflex):
             # If we're a single exon read then both start and end could be within the exon
             if len(exons) == 1 and exons[0][0] < transcript[current_transcript_exon][1] and exons[0][1] > transcript[current_transcript_exon][0]:
                 full_match = False
+
+                start_percent = length_seen_so_far
+                if start_mismatch > 0: # If we're starting into the exon then add that value
+                    start_percent += start_mismatch
+
+                start_percent = 100 * start_percent/total_transcript_len
+
+                end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                if end_mismatch < 0:
+                    end_percent += end_mismatch
+                end_percent = 100 * end_percent/total_transcript_len
+
                 break 
 
             # If we get here then there's no saving us
             matches = False
             break
 
-        return (matches, not full_match, end_flex_values, inner_flex_values)
+        return (matches, not full_match, end_flex_values, inner_flex_values, start_percent, end_percent)
 
 
 def get_possible_genes(index, chr, start, end, direction):
