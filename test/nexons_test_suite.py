@@ -351,6 +351,16 @@ def test_percentile_matching():
     else:
         passed("Percentile single exon match2 OK")
 
+    # Single exon transcript
+    answer = match_exons([[100,150]],[[50,200]],0,0)
+    if abs(answer[4]-33) > 1:
+        failed("Incorrect start for single exon transcript")
+    elif abs(answer[5]-67) > 1:
+        failed("Incorrect end for single exon transcript")
+    else:
+        passed("Percentile single exon transcript OK")
+    
+
 
 if __name__ == "__main__":
     main()
