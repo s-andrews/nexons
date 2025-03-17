@@ -27,6 +27,11 @@ def main():
     print("\nTESTING FEATURE RETRIEVAL\n-------------------------")
     test_feature_retrieval()
 
+    print("\nTESTING PERCENTILE MATCHING\n-----------------------------")
+    test_percentile_matching()
+
+
+
 def failed(message):
     print('\033[91m'+"FAILED: "+'\033[0m'+message, file=sys.stderr)
 
@@ -284,6 +289,67 @@ def test_feature_retrieval():
         passed("Exact end fetch OK")
 
 
+def test_percentile_matching():
+    # Full start to end match
+    answer = match_exons([[100,200],[300,400],[500,600]],[[100,200],[300,400],[500,600]],0,0)
+    if not answer[4] == 0:
+        failed("Incorrect start for full match")
+    elif not answer[5] == 100:
+        failed("Incorrect end for full match")
+    else:
+        passed("Percentile full match OK")
+    
+
+    # Start to mid match
+    answer = match_exons([[100,200],[300,350]],[[100,200],[300,400],[500,600]],0,0)
+    if not answer[4] == 0:
+        failed("Incorrect start for start mid match")
+    elif abs(50-answer[5])>1:
+        failed("Incorrect end for start mid match")
+    else:
+        passed("Percentile start mid match OK")
+
+
+    # Mid to end match
+    answer = match_exons([[350,400],[500,600]],[[100,200],[300,400],[500,600]],0,0)
+    if not answer[5] == 100:
+        failed("Incorrect end for mid end match")
+    elif abs(50-answer[4])>1:
+        failed("Incorrect start for start mid match")
+    else:
+        passed("Percentile mid end match OK")
+
+
+    # Inner match
+    answer = match_exons([[350,400],[500,550]],[[100,200],[300,400],[500,600]],0,0)
+    if abs(50-answer[4])>1:
+        failed("Incorrect start for inner match")
+
+    if abs(83-answer[5])>1:
+        failed("Incorrect end for inner match")
+
+    else:
+        passed("Percentile Inner match OK")
+
+
+    # Single exon match
+    answer = match_exons([[550,600]],[[100,200],[300,400],[500,600]],0,0)
+    if abs(answer[4]-83) > 1:
+        failed("Incorrect start single exon match")
+    elif not answer[5] == 100:
+        failed("Incorrect end for single exon match")
+    else:
+        passed("Percentile single exon match OK")
+
+
+    # Single exon match 2
+    answer = match_exons([[100,150]],[[100,200],[300,400],[500,600]],0,0)
+    if abs(answer[5]-17) > 1:
+        failed("Incorrect end single exon match2")
+    elif not answer[4] == 0:
+        failed("Incorrect start for single exon match2")
+    else:
+        passed("Percentile single exon match2 OK")
 
 
 if __name__ == "__main__":

@@ -488,16 +488,17 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 outcomes["Opposing_Strand_Hit"] += 1
 
             # Add the read percentiles
-            if genes[found_gene_id]["strand"] == "+":
-                used_start_percentile = math.floor(best_start_percentile)
-                used_end_percentile = math.ceil(best_end_percentile)
-                for i in range(used_start_percentile,used_end_percentile+1):
-                    read_coverage_percentiles[i] += 1
-            else:
-                used_start_percentile = math.floor(100-best_end_percentile)
-                used_end_percentile = math.ceil(100-best_start_percentile)
-                for i in range(used_start_percentile,used_end_percentile+1):
-                    read_coverage_percentiles[i] += 1
+            if found_status == "partial" or found_status == "unique":
+                if genes[found_gene_id]["strand"] == "+":
+                    used_start_percentile = math.floor(best_start_percentile)
+                    used_end_percentile = math.ceil(best_end_percentile)
+                    for i in range(used_start_percentile,used_end_percentile+1):
+                        read_coverage_percentiles[i] += 1
+                else:
+                    used_start_percentile = math.floor(100-best_end_percentile)
+                    used_end_percentile = math.ceil(100-best_start_percentile)
+                    for i in range(used_start_percentile,used_end_percentile+1):
+                        read_coverage_percentiles[i] += 1
 
             # We can add in the flex values to the total
             for i in best_endflex:
@@ -737,11 +738,12 @@ def match_exons(exons,transcript,flex,endflex):
                         break
 
                 # We matched and there's more read exons left. 
-                start_percent = length_seen_so_far
-                if start_mismatch > 0: # If we're starting into the exon then add that value
-                    start_percent += start_mismatch
+                if current_read_exon == 0:
+                    start_percent = length_seen_so_far
+                    if start_mismatch > 0: # If we're starting into the exon then add that value
+                        start_percent += start_mismatch
 
-                start_percent = 100 * start_percent/total_transcript_len
+                    start_percent = 100 * start_percent/total_transcript_len
 
                 length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
 
