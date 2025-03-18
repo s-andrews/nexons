@@ -236,18 +236,37 @@
 
         <div class="row text-center">
             <div class="col-md-12 sectionhead">
-                <h2>Read Lengths</h2>
+                <h2>Read Lengths and Coverage</h2>
             </div>
         </div>
+
         <div class="row">
             <div class="col-md-2">
             </div>
 
-            <div class="col-md-8">
+            <div class="col-md-4">
+                <h2>Read Lengths</h2>
+            </div>
+            <div class="col-md-4">
+                <h2>Transcript coverage</h2>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-2">
+            </div>
+
+            <div class="col-md-4">
                 <div style="width: 100%;" class="pt-1">
                     <canvas id="readlengthchart" style="width: 100%;"></canvas>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="transcriptcoveragechart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+
         </div>
 
 
@@ -412,10 +431,64 @@
                     title: {
                         display: false
                     }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            text: "Length of read (nearest 100bp)",
+                            display: true
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Read count",
+                            display: true
+                        }
+                    }
                 }
             }
         });
 
+
+        const transcriptcoveragedata = {
+            labels: %%TranscriptCoverageLabels%%,
+            datasets: [{
+                label: 'Transcript Coverage',
+                data: %%TranscriptCoverageData%%,
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("transcriptcoveragechart", {
+            type: "line",
+            data: transcriptcoveragedata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            text: "Percentile through gene (5' to 3')",
+                            display: true
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Read count",
+                            display: true
+                        }
+                    }
+                }
+            }
+        });
 
         const innerflexdata = {
             labels: %%InnerFlexLabels%%,
@@ -438,6 +511,20 @@
                     },
                     title: {
                         display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            text: "Distance from annotated junction (bp)",
+                            display: true
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Junction count",
+                            display: true
+                        }
                     }
                 }
             }
@@ -464,6 +551,29 @@
                     },
                     title: {
                         display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            text: "Distance from annotated junction (bp)",
+                            display: true
+                        },
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                value = value - %%endflex%%
+                                if (value % 50 === 0) {
+                                    return value
+                                }
+                                return null
+                            }
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Junction count",
+                            display: true
+                        }
                     }
                 }
             }

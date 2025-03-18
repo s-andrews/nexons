@@ -109,6 +109,15 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, covera
     template_text = template_text.replace("%%ReadLengthData%%",str(readlengthdata))
 
 
+    # We need the data for the transcript coverage plots.
+    transcript_coverage_labels = []
+    for i in range(101):
+        transcript_coverage_labels.append(i)
+
+    
+    template_text = template_text.replace("%%TranscriptCoverageLabels%%",str(transcript_coverage_labels))
+    template_text = template_text.replace("%%TranscriptCoverageData%%",str(coverage))
+
     # We need to assemble the inner and end flexibility data too
     innerflexlabels = []
     innerflexdata = []
@@ -129,6 +138,8 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, covera
     
     template_text = template_text.replace("%%EndFlexLabels%%",str(endflexlabels))
     template_text = template_text.replace("%%EndFlexData%%",str(endflexdata))
+    # We also need to add the endflex value
+    template_text = template_text.replace("%%endflex%%",str(endflexlabels[-1]))
 
 
 
