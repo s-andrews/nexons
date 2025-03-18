@@ -5,6 +5,9 @@ Nexons is a program to quantitate RNA-Seq data from nanopore sequencing runs.  I
 
 ![Read Fate](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/read_fate.png)
 ![Alignment Fate](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/alignment_fate.png)
+![Alignment Directionality](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/alignment_directionality.png)
+![Read Length and Coverage](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/read_length_and_coverage.png)
+![Exon Flex](https://raw.githubusercontent.com/s-andrews/nexons/refs/heads/master/images/exon_flex.png)
 
 # Installation
 Nexons is a python program which should work under any recent version of python3.  It depends on the following non-core packages
