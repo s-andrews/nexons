@@ -214,6 +214,21 @@ def test_exon_matching():
         passed("Intron match OK")
 
 
+    # Exon to intron match
+    answer = match_exons([[35,45]],[[10,20],[30,40],[50,60]],0,0)
+    if answer[0]:
+        failed("Exon to Intron match reported as properly matching")
+
+    elif answer[2]:
+        failed("Endflex reported for exon to intron match")
+
+    elif answer[3]:
+        failed("Innerflex reported for exon to intron match")
+
+    else:
+        passed("Exon to Intron match OK")
+
+
     # Mismatch
     answer = match_exons([[100,150]],[[10,20],[30,40],[50,60]],0,0)
     if answer[0]:
@@ -351,6 +366,17 @@ def test_percentile_matching():
     else:
         passed("Percentile single exon match2 OK")
 
+
+    # Middle exon match
+    answer = match_exons([[300,400]],[[100,200],[300,400],[500,600]],0,0)
+    if abs(answer[4]-33) > 1:
+        failed("Incorrect middle exon start match")
+    elif abs(answer[5]-67) > 1:
+        failed("Incorrect middle exon end match")
+    else:
+        passed("Percentile middle exon match OK")
+
+
     # Single exon transcript
     answer = match_exons([[100,150]],[[50,200]],0,0)
     if abs(answer[4]-33) > 1:
@@ -360,7 +386,6 @@ def test_percentile_matching():
     else:
         passed("Percentile single exon transcript OK")
     
-
 
 if __name__ == "__main__":
     main()

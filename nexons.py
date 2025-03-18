@@ -39,8 +39,6 @@ def main():
         log(f"Quantitating {bam_file} ({count+1} of {len(options.bam)})")
         read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations,coverage = process_bam_file(genes_transcripts_exons, gene_index, bam_file, options.direction, options.flex, options.endflex)
 
-        breakpoint()
-
         results.append(quantitations)
 
         write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
@@ -492,11 +490,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 if genes[found_gene_id]["strand"] == "+":
                     used_start_percentile = math.floor(best_start_percentile)
                     used_end_percentile = math.ceil(best_end_percentile)
+                    # print("For Matching from",used_start_percentile," to ",used_end_percentile)
                     for i in range(used_start_percentile,used_end_percentile+1):
                         read_coverage_percentiles[i] += 1
                 else:
                     used_start_percentile = math.floor(100-best_end_percentile)
                     used_end_percentile = math.ceil(100-best_start_percentile)
+                    # print("Rev Matching from",used_start_percentile," to ",used_end_percentile)
                     for i in range(used_start_percentile,used_end_percentile+1):
                         read_coverage_percentiles[i] += 1
 
@@ -687,31 +687,45 @@ def match_exons(exons,transcript,flex,endflex):
             start_matches = abs(start_mismatch) <= this_start_flex
             end_matches = abs(end_mismatch) <= this_end_flex
 
+            # We can end up in a weird situation where the start and end flex can be big enough
+            # that we say we match when we don't even overlap.  Let's fix that 
+            # 
+            # If we don't overlap then set both start and end match to false.
+            if this_start > transcript[current_transcript_exon][1] or this_end < transcript[current_transcript_exon][0]:
+                start_matches = False
+                end_matches = False
+
+            # print("Start mismatch",start_mismatch,start_matches)
+            # print("End mismatch",end_mismatch,end_matches)
+
             if start_matches and end_matches:
                 # This exon matches
 
                 # Add the mismatch values to the overall pool
                 if current_transcript_exon == 0:
                     end_flex_values.append(start_mismatch)
+                else:
+                    inner_flex_values.append(start_mismatch)
+
+                if current_read_exon == 0:
                     # Add the start percentage to the results
                     start_percent = length_seen_so_far
                     if start_mismatch > 0: # If we're starting into the exon then add that value
                         start_percent += start_mismatch
 
                     start_percent = 100 * start_percent/total_transcript_len
-                else:
-                    inner_flex_values.append(start_mismatch)
 
-                            
+
                 if current_transcript_exon == last_transcript_exon:
                     end_flex_values.append(end_mismatch)
                     # Add the end percentage to the results
-                    end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                    end_percent = length_seen_so_far + (1+transcript[current_transcript_exon][1]-transcript[current_transcript_exon][0])
                     if end_mismatch < 0:
                         end_percent += end_mismatch
                     end_percent = 100 * end_percent/total_transcript_len
                 else:
                     inner_flex_values.append(end_mismatch)
+
 
                 if current_read_exon == last_read_exon:
                     # We're at the end of the match
@@ -720,7 +734,7 @@ def match_exons(exons,transcript,flex,endflex):
                         full_match = False
                     
                         # Add the end percentage to the results
-                        end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                        end_percent = length_seen_so_far + (1+transcript[current_transcript_exon][1]-transcript[current_transcript_exon][0])
                         if end_mismatch < 0:
                             end_percent += end_mismatch
                         end_percent = 100 * end_percent/total_transcript_len
@@ -756,6 +770,7 @@ def match_exons(exons,transcript,flex,endflex):
 
             # We would be in the first exon and not have made the first match yet.
             if current_read_exon == 0 and exons[0][0] > transcript[current_transcript_exon][1]:
+                # print("Before match start")
                 # We can just try the next transcript exon if there is one
                 if current_transcript_exon < last_transcript_exon:
                     length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
@@ -769,6 +784,7 @@ def match_exons(exons,transcript,flex,endflex):
             # We could have a partial match.  If we're the first exon of a multi-exon read 
             # then the start could be within the exon.
             if current_read_exon == 0 and len(exons) > 1:
+                # print("Possible partial match")
                 if end_matches and exons[0][0] >= transcript[current_transcript_exon][0] and exons[0][0] <= transcript[current_transcript_exon][1]:
                     # This could work, but only if we have enough exons left
                     if len(exons) > (len(transcript)-current_transcript_exon):
@@ -796,15 +812,14 @@ def match_exons(exons,transcript,flex,endflex):
             # If we're the last exon of a multi-exon read then the end could be within the 
             # exon
             if current_read_exon == last_read_exon and len(exons) > 1:
+                # print("Possible end exon")
                 if start_matches and exons[current_read_exon][1] >= transcript[current_transcript_exon][0] and exons[current_read_exon][1] <= transcript[current_transcript_exon][1]:
                     full_match = False
 
-                    end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                    end_percent = length_seen_so_far + (1+transcript[current_transcript_exon][1]-transcript[current_transcript_exon][0])
                     if end_mismatch < 0:
                         end_percent += end_mismatch
                     end_percent = 100 * end_percent/total_transcript_len
-
-
 
                     # This is the last exon so we can stop looking
                     break
@@ -814,7 +829,8 @@ def match_exons(exons,transcript,flex,endflex):
 
                 
             # If we're a single exon read then both start and end could be within the exon
-            if len(exons) == 1 and exons[0][0] < transcript[current_transcript_exon][1] and exons[0][1] > transcript[current_transcript_exon][0]:
+            if len(exons) == 1 and exons[0][0] >= transcript[current_transcript_exon][0] and exons[0][1] <= transcript[current_transcript_exon][1]:
+                # print("Internal exon match")
                 full_match = False
 
                 start_percent = length_seen_so_far
@@ -823,7 +839,7 @@ def match_exons(exons,transcript,flex,endflex):
 
                 start_percent = 100 * start_percent/total_transcript_len
 
-                end_percent = length_seen_so_far + (1+exon[1]-exon[0])
+                end_percent = length_seen_so_far + (1+transcript[current_transcript_exon][1]-transcript[current_transcript_exon][0])
                 if end_mismatch < 0:
                     end_percent += end_mismatch
                 end_percent = 100 * end_percent/total_transcript_len
@@ -833,6 +849,14 @@ def match_exons(exons,transcript,flex,endflex):
             # If we get here then there's no saving us
             matches = False
             break
+
+        if matches and start_percent is not None:
+
+            if start_percent > end_percent:
+                raise Exception("Start percent is above end percent "+str(start_percent)+" - "+str(end_percent))
+
+            if start_percent > 100 or start_percent < 0 or end_percent > 100 or end_percent < 0:
+                raise Exception("Start or end percent is out of range "+str(start_percent)+" - "+str(end_percent))
 
         return (matches, not full_match, end_flex_values, inner_flex_values, start_percent, end_percent)
 
