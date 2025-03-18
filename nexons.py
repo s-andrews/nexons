@@ -7,7 +7,7 @@ import json
 import html
 import math
 
-VERSION = "0.2.devel"
+VERSION = "0.3.devel"
 
 # This is the resolution of the feature indexing - we split the genome
 # into bins of this size and use these to quickly find the features we
