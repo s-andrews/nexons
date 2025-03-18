@@ -44,9 +44,9 @@ def main():
         write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
         write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
 
-        log(f"Summary for {bam_file}:")
-        for metric in outcomes:
-            log(f"{metric}: {outcomes[metric]}")
+        # log(f"Summary for {bam_file}:")
+        # for metric in outcomes:
+        #     log(f"{metric}: {outcomes[metric]}")
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
