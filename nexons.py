@@ -1130,7 +1130,7 @@ def get_options():
     parser.add_argument(
         "--endflex","-e",
         help="How many bases different can transcript ends be and still merge them",
-        default=1000, 
+        default=500, 
         type=int
     )
 
