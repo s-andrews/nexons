@@ -401,7 +401,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             # unique, partial, multi 
 
             transcript_id,status,observed_endflex, observed_innerflex, start_percent, end_percent = gene_matches(exons,genes[gene_id],flex,endflex)
+
             if transcript_id is not None:
+
                 if status=="unique":
                     # We're done here
                     found_hit = True
@@ -781,13 +783,17 @@ def match_exons(exons,transcript,flex,endflex):
 
             # Not everything matches.
 
-            # We would be in the first exon and not have made the first match yet.
+            # Let's see if it's worth continuing
+                
+            # We could be in the first exon and not have made the first match yet.
             if current_read_exon == 0 and exons[0][0] > transcript[current_transcript_exon][1]:
                 # print("Before match start")
                 # We can just try the next transcript exon if there is one
                 if current_transcript_exon < last_transcript_exon:
                     length_seen_so_far += 1+transcript[current_transcript_exon][1] - transcript[current_transcript_exon][0]
                     current_transcript_exon += 1
+                    # We can't be a full match any more
+                    full_match = False
                     continue
                 else:
                     # This isn't going to match
@@ -1031,10 +1037,10 @@ def read_gtf(gtf_file, max_tsl):
                 warn(f"No transcript name or id found for exon at {chrom}:{start}-{end}")
                 continue
 
-            if transcript_support_level is None:
+            if max_tsl is not None and transcript_support_level is None:
                 continue
 
-            if transcript_support_level > max_tsl:
+            if max_tsl is not None and transcript_support_level > max_tsl:
                 continue
 
             if gene_id is None:
@@ -1178,7 +1184,12 @@ def get_options():
         version=f"Nexons version {VERSION}"
     )
 
-    return(parser.parse_args())
+    options = parser.parse_args()
+
+    if options.maxtsl == 0:
+        options.maxtsl = None
+
+    return(options)
 
 
 

@@ -236,7 +236,14 @@ def test_exon_matching():
         
     else:
         passed("Mismatch exons OK")
-        
+
+
+    # Perfect match to later exon only
+    answer = match_exons([(30,40)],[[10,20], [30,40]],0,0)
+    if not answer[1]:
+        failed("Partial later perfect match reported as complete")
+    else:
+        passed("Partial later perfect match OK")
 
 def test_feature_retrieval():
     # test.gtf is human GRCh38v113 chr3 between 63723373-64479723
