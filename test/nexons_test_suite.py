@@ -18,6 +18,7 @@ from nexons import get_possible_genes, match_exons, gene_matches,read_gtf, build
 
 
 def main():
+
     print("TESTING EXON MATCHING\n---------------------")
     test_exon_matching()
 
@@ -205,6 +206,16 @@ def test_exon_matching():
 
     else:
         passed("Internal exon match OK")
+
+    # Internal imperfect match - we may start the read slightly before the exon
+    answer = match_exons([[28,35]],[[10,20],[30,40],[50,60]],3,0)
+    if not answer[0]:
+        failed("Internal imperfect not reported as matching")
+    elif not answer[1]:
+        failed("Internal imperfect reported as perfect")
+    else:
+        passed("Internal imperfect OK")
+    
 
 
     # Intron match

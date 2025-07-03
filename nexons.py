@@ -604,7 +604,7 @@ def gene_matches(exons,gene,flex,endflex):
     for transcript in gene["transcripts"].values():
 
         success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
-
+        
         if success:
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
@@ -846,7 +846,10 @@ def match_exons(exons,transcript,flex,endflex):
 
                 
             # If we're a single exon read then both start and end could be within the exon
-            if len(exons) == 1 and exons[0][0] >= transcript[current_transcript_exon][0] and exons[0][1] <= transcript[current_transcript_exon][1]:
+            # We could also be slightly outside the exon if we're still within flex range
+            # There might be a better way to do this using the existing flex ranges but this
+            # seems to work for now.
+            if len(exons) == 1 and exons[0][0] >= (transcript[current_transcript_exon][0]-flex) and exons[0][1] <= transcript[current_transcript_exon][1]+flex:
                 # print("Internal exon match")
                 full_match = False
 
