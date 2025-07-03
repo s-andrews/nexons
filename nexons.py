@@ -160,12 +160,13 @@ def write_output(genes, quantitations, bam_files, outbase):
         log(f"Outfile is {outfile}")
 
         # We need a list of all transcript and gene ids used and their detials
+        # We'll fetch these from the genes data structure so we'll get values
+        # reported for all measured transcripts even if they got a zero count
         all_ids = set()
 
-        for q in quantitations:
-            for id in q[slot]:
-                if not id in all_ids:
-                    all_ids.add(id)
+        for gene_id in genes:
+            for transcript_id in genes[gene_id]["transcripts"]:
+                all_ids.add((gene_id,transcript_id))
 
         # That gets us all of the possible ids.  Now we can go through these in
         # each sample
@@ -533,6 +534,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                     counts["partial"][(found_gene_id,found_transcript_id)] = 1
                 else:
                     counts["partial"][(found_gene_id,found_transcript_id)] += 1
+
 
             if found_status == "unique":
                 # We increase the unique count
@@ -1114,7 +1116,7 @@ def get_options():
 
     parser.add_argument(
         "--maxtsl",
-        help="Maximum transcript support level to analyse",
+        help="Maximum transcript support level to analyse (default 2)",
         type=int,
         default=2
     )
