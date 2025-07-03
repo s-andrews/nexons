@@ -605,20 +605,18 @@ def gene_matches(exons,gene,flex,endflex):
 
         success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
 
-        if success and not partial:
-            # It's a full match - we can stop looking
-            matched_transcript = transcript["id"]
-            status = "unique"
-            best_endflex = endflex_observed
-            best_innerflex = innerflex_observed
-            best_start_percentile = start_percent
-            best_end_percentile = end_percent
-            break
-
-        if success and partial:
+        if success:
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
-                status = "partial"
+
+                # If it's a full match - we can record this but we need to keep looking
+                # as there may be other matches which are equally good if this 
+                # transcript is a subset of another larger trascript.
+                if partial:
+                    status = "partial"
+                else:
+                    status = "unique"
+
                 best_endflex = endflex_observed
                 best_innerflex = innerflex_observed
                 best_start_percentile = start_percent

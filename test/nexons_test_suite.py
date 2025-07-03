@@ -85,6 +85,14 @@ def test_gene_matching():
     else:
         passed("Intron match OK")
 
+    gene = {'name': 'TEST', 'id': 'ENSG00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'transcripts': {'ENST00000000001': {'name': 'TEST-101', 'id': 'ENST00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'exons': [[10,100], [200,300], [600,800]]}, 'ENST00000000002': {'name': 'TEST-102', 'id': 'ENST00000000002', 'chrom': '1', 'start': 10, 'end': 300, 'strand': '+', 'exons': [[10, 100], [200,300]]}}}
+    # Subset match
+    answer = gene_matches([[10,100],[200,300]],gene,0,0)
+    if answer[1] != "multi":
+        failed("Subset match not reported as multi")
+    else:
+        passed("Subset match OK")
+
 
 
 
