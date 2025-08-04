@@ -51,7 +51,7 @@ def main():
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
 
 def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, outbase):
-    outfile = outbase+"_"+bam_file[:-4]+"_stats.txt"
+    outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_stats.txt"
     output = {
         "file": bam_file,
         "outcomes":outcomes,
@@ -67,7 +67,7 @@ def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, cover
 
 
 def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, options, outbase):
-    outfile = outbase+"_"+bam_file[:-4]+"_qc.html"
+    outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
     template_text = ""
