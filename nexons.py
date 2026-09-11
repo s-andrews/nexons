@@ -81,7 +81,7 @@ def process_file_job(job):
 
 
 def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, outbase):
-    outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_stats.txt"
+    outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_nexons_stats.txt"
     output = {
         "file": bam_file,
         "outcomes":outcomes,
