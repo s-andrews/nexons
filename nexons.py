@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import html
 import math
+import gzip
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import ExitStack
@@ -1072,146 +1073,156 @@ def read_gtf(gtf_file, max_tsl):
     attribute_prefixes = ("gene_id", "gene_name", "transcript_id",
                           "transcript_name", "transcript_support_level")
 
-    with open(gtf_file) as file:
 
-        genes = {}
+    file = None
 
-        for line in file:
+    if gtf_file.lower().endswith(".gz"):
+        file = gzip.open(gtf_file,"rt", encoding="utf8")
+    
+    else:
+        file = open(gtf_file,"rt",encoding="utf8")
+        
 
-            # Skip comments
-            if line.startswith("#"):
+    genes = {}
+
+    for line in file:
+
+        # Skip comments
+        if line.startswith("#"):
+            continue
+
+        sections = line.split("\t")
+
+        if len(sections) < 7:
+            warn(f"Not enough data from line {line} in {gtf_file}")
+            continue
+
+        if sections[2] != "exon":
+            continue
+
+        # we can pull out the main information easily enough
+        chrom = sections[0]
+        start = int(sections[3])
+        end = int(sections[4])
+        strand = sections[6]
+
+        # For the gene name, gene id and TSL we need to delve into the
+        # extended comments
+        comments = sections[8].split(";")
+        gene_id=None
+        gene_name=None
+        transcript_id=None
+        transcript_name=None
+        transcript_support_level=None
+
+        for comment in comments:
+            stripped = comment.strip()
+            if not stripped.startswith(attribute_prefixes):
                 continue
-
-            sections = line.split("\t")
-
-            if len(sections) < 7:
-                warn(f"Not enough data from line {line} in {gtf_file}")
-                continue
-
-            if sections[2] != "exon":
-                continue
-
-            # we can pull out the main information easily enough
-            chrom = sections[0]
-            start = int(sections[3])
-            end = int(sections[4])
-            strand = sections[6]
-
-            # For the gene name, gene id and TSL we need to delve into the
-            # extended comments
-            comments = sections[8].split(";")
-            gene_id=None
-            gene_name=None
-            transcript_id=None
-            transcript_name=None
-            transcript_support_level=None
-
-            for comment in comments:
-                stripped = comment.strip()
-                if not stripped.startswith(attribute_prefixes):
-                    continue
-                if stripped.startswith("gene_id"):
-                    gene_id=comment[8:].replace('"','').strip()
+            if stripped.startswith("gene_id"):
+                gene_id=comment[8:].replace('"','').strip()
+            
+            elif stripped.startswith("gene_name"):
+                gene_name=stripped[10:].replace('"','').strip()
                 
-                elif stripped.startswith("gene_name"):
-                    gene_name=stripped[10:].replace('"','').strip()
-                    
-                elif stripped.startswith("transcript_id"):
-                    transcript_id=comment[15:].replace('"','').strip()
-                          
-                elif stripped.startswith("transcript_name"):
-                    transcript_name=stripped[17:].replace('"','').strip()
+            elif stripped.startswith("transcript_id"):
+                transcript_id=comment[15:].replace('"','').strip()
+                        
+            elif stripped.startswith("transcript_name"):
+                transcript_name=stripped[17:].replace('"','').strip()
 
-                elif stripped.startswith("transcript_support_level"):
-                    temp_tsl=stripped[24:].replace('"','').strip().split()[0].strip()
-                    if not temp_tsl.isdigit():
-                        if temp_tsl=="NA":
-                            continue
-                        warn(f"Ignoring non-numeric TSL value {temp_tsl}")
-                    else:
-                        transcript_support_level = int(temp_tsl)
+            elif stripped.startswith("transcript_support_level"):
+                temp_tsl=stripped[24:].replace('"','').strip().split()[0].strip()
+                if not temp_tsl.isdigit():
+                    if temp_tsl=="NA":
+                        continue
+                    warn(f"Ignoring non-numeric TSL value {temp_tsl}")
+                else:
+                    transcript_support_level = int(temp_tsl)
 
-            # We have a lot of primary transcripts with no annotated TSL so we're going to 
-            # force the issue in these cases.  Even where there is a TSL we're overwriting
-            # to keep these genes
-            for good_tag in good_tags:
-                if good_tag in sections[8]:
-                    transcript_support_level = 1
-                    break
+        # We have a lot of primary transcripts with no annotated TSL so we're going to 
+        # force the issue in these cases.  Even where there is a TSL we're overwriting
+        # to keep these genes
+        for good_tag in good_tags:
+            if good_tag in sections[8]:
+                transcript_support_level = 1
+                break
 
 
-                    
-            if gene_id is None and gene_name is None:
-                warn(f"No gene name or id found for exon at {chrom}:{start}-{end}")
-                continue
+                
+        if gene_id is None and gene_name is None:
+            warn(f"No gene name or id found for exon at {chrom}:{start}-{end}")
+            continue
 
-            if transcript_id is None and transcript_name is None:
-                warn(f"No transcript name or id found for exon at {chrom}:{start}-{end}")
-                continue
+        if transcript_id is None and transcript_name is None:
+            warn(f"No transcript name or id found for exon at {chrom}:{start}-{end}")
+            continue
 
-            if max_tsl is not None and transcript_support_level is None:
-                continue
+        if max_tsl is not None and transcript_support_level is None:
+            continue
 
-            if max_tsl is not None and transcript_support_level > max_tsl:
-                continue
+        if max_tsl is not None and transcript_support_level > max_tsl:
+            continue
 
-            if gene_id is None:
-                gene_id = gene_name
+        if gene_id is None:
+            gene_id = gene_name
 
-            if gene_name is None:
-                gene_name = gene_id
-            
+        if gene_name is None:
+            gene_name = gene_id
+        
 
-            if transcript_id is None:
-                transcript_id = transcript_name
+        if transcript_id is None:
+            transcript_id = transcript_name
 
-            if transcript_name is None:
-                transcript_name = transcript_id
+        if transcript_name is None:
+            transcript_name = transcript_id
 
-            exon = [start, end]
-            
+        exon = [start, end]
+        
 
-            gene = genes.get(gene_id)
-            if gene is None:
-                gene = genes[gene_id] = {
-                    "name": gene_name,
-                    "id": gene_id,
-                    "chrom": chrom,
-                    "start": start,
-                    "end" : end,
-                    "strand": strand,
-                    "transcripts": {
-                    }
+        gene = genes.get(gene_id)
+        if gene is None:
+            gene = genes[gene_id] = {
+                "name": gene_name,
+                "id": gene_id,
+                "chrom": chrom,
+                "start": start,
+                "end" : end,
+                "strand": strand,
+                "transcripts": {
                 }
-            else:
-                if start < gene["start"]:
-                    gene["start"] = start
-                if end > gene["end"]:
-                    gene["end"] = end
+            }
+        else:
+            if start < gene["start"]:
+                gene["start"] = start
+            if end > gene["end"]:
+                gene["end"] = end
 
 
-            transcripts = gene["transcripts"]
-            transcript = transcripts.get(transcript_id)
-            if transcript is None:
-                transcript = transcripts[transcript_id] = {
-                    "name": transcript_name,
-                    "id": transcript_id,
-                    "chrom": chrom,
-                    "start": start,
-                    "end": end,
-                    "strand": strand,
-                    "exons" : []
-                }
-            else:
-                if start < transcript["start"]:
-                    transcript["start"] = start
+        transcripts = gene["transcripts"]
+        transcript = transcripts.get(transcript_id)
+        if transcript is None:
+            transcript = transcripts[transcript_id] = {
+                "name": transcript_name,
+                "id": transcript_id,
+                "chrom": chrom,
+                "start": start,
+                "end": end,
+                "strand": strand,
+                "exons" : []
+            }
+        else:
+            if start < transcript["start"]:
+                transcript["start"] = start
 
-                if end > transcript["end"]:
-                    transcript["end"] = end
+            if end > transcript["end"]:
+                transcript["end"] = end
 
 
-            transcript["exons"].append(exon)
+        transcript["exons"].append(exon)
 
+
+    file.close()
 
     # Before returning the results we need to put the exons
     # for each transcript into order.  We keep everything
