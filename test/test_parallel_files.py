@@ -1,5 +1,7 @@
 """CLI integration coverage for concurrent BAM files and ordered aggregation."""
 from pathlib import Path
+import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -33,9 +35,17 @@ class ParallelFilesTests(unittest.TestCase):
                         bam.write(read)
             for jobs in (1, 2):
                 result = subprocess.run([sys.executable, str(SCRIPT), str(gtf),
-                    *inputs, '--parallel', str(jobs), '--outbase', str(root / f'out{jobs}')],
+                    *inputs, '--parallel', str(jobs), '--outbase', str(root / f'out{jobs}'),
+                    *(['--allqc'] if jobs == 2 else [])],
                     capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
+            for jobs in (1, 2):
+                report = (root / f'out{jobs}_combined_qc.html').read_text()
+                self.assertNotIn('%%', report)
+                data = json.loads(re.search(r'<script id="qc-data" type="application/json">(.*?)</script>', report, re.S).group(1))
+                self.assertEqual(data['names'], ['z', 'a'])
+                self.assertEqual([sample['outcomes']['Total_Reads'] for sample in data['samples']], [7, 3])
+                self.assertEqual(report.count('<canvas '), 11)
             for category in ('unique', 'partial', 'gene'):
                 serial = (root / f'out1_{category}.txt').read_text()
                 self.assertEqual(serial, (root / f'out2_{category}.txt').read_text())
@@ -45,6 +55,7 @@ class ParallelFilesTests(unittest.TestCase):
                 self.assertEqual((root / f'out1_{name}_stats.txt').read_text(),
                                  (root / f'out2_{name}_stats.txt').read_text())
                 self.assertTrue((root / f'out2_{name}_qc.html').exists())
+                self.assertFalse((root / f'out1_{name}_qc.html').exists())
                 with pysam.AlignmentFile(root / f'out1_{name}.bam', 'rb') as a, \
                      pysam.AlignmentFile(root / f'out2_{name}.bam', 'rb') as b:
                     self.assertEqual([r.to_string() for r in a], [r.to_string() for r in b])
