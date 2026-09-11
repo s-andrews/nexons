@@ -58,7 +58,8 @@ def main():
                                "read_lengths": read_lengths, "end_flex": endflex_observations,
                                "inner_flex": innerflex_observations, "coverage": coverage})
             write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
-            write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
+            if options.allqc:
+                write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
     write_combined_qc_report(qc_samples, options, options.outbase)
@@ -1279,6 +1280,12 @@ def get_options():
     )
 
     parser.add_argument(
+        "--allqc",
+        action="store_true",
+        help="Write individual sample QC HTML reports as well as the combined report",
+    )
+
+    parser.add_argument(
         "--noannotate",
         action="store_true",
         help="Skip the production of annotated BAM files"
@@ -1328,4 +1335,3 @@ def get_options():
 
 if __name__ == "__main__":
     main()
-

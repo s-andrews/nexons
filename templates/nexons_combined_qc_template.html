@@ -124,12 +124,18 @@
         </div>
 
         <div class="sectionhead"><h2>All QC Metrics</h2></div>
-        <div class="table-responsive"><table class="table table-sm table-striped">%%METRICS%%</table></div>
-        <p>Counts are shown without normalisation. Full matches are included in partial and gene counts in the table.
-        The alignment fate chart separates these into non-overlapping categories.</p>
-<div class="sectionhead"><h2>Read Fate</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="chart-container" style="position:relative;height:400px"><canvas id="fatechart"></canvas></div></div></div>
-<div class="sectionhead"><h2>Alignment Fate</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="chart-container" style="position:relative;height:400px"><canvas id="alignmentchart"></canvas></div></div></div>
-<div class="sectionhead"><h2>Alignment Directionality</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="chart-container" style="position:relative;height:400px"><canvas id="strandchart"></canvas></div></div></div>
+        <div class="table-responsive" style="width:90%;margin-left:auto;margin-right:auto;"><table class="table table-sm table-striped">%%METRICS%%</table></div>
+        <p>Full transcript matches are included in partial transcript and gene matches.
+        Each alignment class is shown separately. Percentages use all reads (BAM entries) for each sample.</p>
+<div class="sectionhead"><h2>Read Fate</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="my-2"><label for="fatechart-mode">Display: </label> <select id="fatechart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="fatechart"></canvas></div></div></div>
+<div class="sectionhead"><h2>Alignment Fate</h2></div>
+<div class="row justify-content-center"><div class="col-md-10"><h3>Unique Gene Match</h3><div class="my-2"><label for="genechart-mode">Display: </label> <select id="genechart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="genechart"></canvas></div></div></div>
+<div class="row justify-content-center"><div class="col-md-10"><h3>Partial Unique Transcript Match</h3><div class="my-2"><label for="partialchart-mode">Display: </label> <select id="partialchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="partialchart"></canvas></div></div></div>
+<div class="row justify-content-center"><div class="col-md-10"><h3>Full Transcript Match</h3><div class="my-2"><label for="fullchart-mode">Display: </label> <select id="fullchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="fullchart"></canvas></div></div></div>
+<div class="row justify-content-center"><div class="col-md-10"><h3>Multi Gene Match</h3><div class="my-2"><label for="multigenechart-mode">Display: </label> <select id="multigenechart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="multigenechart"></canvas></div></div></div>
+<div class="row justify-content-center"><div class="col-md-10"><h3>No Gene Match</h3><div class="my-2"><label for="nogenchart-mode">Display: </label> <select id="nogenchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="nogenchart"></canvas></div></div></div>
+
+<div class="sectionhead"><h2>Alignment Directionality</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="my-2"><label for="strandchart-mode">Display: </label> <select id="strandchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="strandchart"></canvas></div></div></div>
 <div class="sectionhead"><h2>Read Lengths and Coverage</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="readlengthchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="transcriptcoveragechart"></canvas></div></div></div>
 <div class="sectionhead"><h2>Exon Match Flexibility</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="innerflexchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="endflexchart"></canvas></div></div></div>
 <p class="mt-3">Read lengths use each sample's reported bins, including its collapsed high-length tail.
@@ -141,31 +147,55 @@ Legends can be clicked to hide or show samples or categories.</p>
 const {names, samples} = JSON.parse(document.getElementById('qc-data').textContent);
 const categoryColors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#777777'];
 const sampleColors = samples.map((_, i) => `hsl(${i * 137.508 % 360}, 65%, 42%)`);
-function stacked(id, categories) {
-    document.getElementById(id).parentElement.style.height = `${Math.max(280, names.length * 35 + 100)}px`;
-    new Chart(document.getElementById(id), {
+function barChart(id, categories, stacked = true) {
+    const height = stacked ? Math.max(280, names.length * 35 + 100)
+                           : Math.max(150, names.length * 26 + 65);
+    document.getElementById(id).parentElement.style.height = `${height}px`;
+    const chart = new Chart(document.getElementById(id), {
         type: 'bar',
-        data: {labels: names, datasets: categories.map(([label, value], i) => ({
-            label, data: samples.map(s => value(s.outcomes)), backgroundColor: categoryColors[i]
+        data: {labels: names, datasets: categories.map(([label, value, color], i) => ({
+            label, data: samples.map(s => value(s.outcomes)), backgroundColor: color || categoryColors[i]
         }))},
         options: {indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-            plugins: {legend: {position: 'bottom'}},
-            scales: {x: {stacked: true, beginAtZero: true, title: {display: true, text: 'Count'}},
-                     y: {stacked: true, ticks: {autoSkip: false}}}}
+            plugins: {legend: {display: stacked, position: 'bottom'}},
+            scales: {x: {stacked, beginAtZero: true, title: {display: true, text: 'Count'}},
+                     y: {stacked, ticks: {autoSkip: false}}}}
     });
+    const mode = document.getElementById(`${id}-mode`);
+    function updateDisplay() {
+        const percent = mode.value === 'percent';
+        chart.data.datasets.forEach((dataset, category) => {
+            dataset.data = samples.map(sample => {
+                const count = categories[category][1](sample.outcomes);
+                return percent ? (sample.outcomes.Total_Reads > 0 ? 100 * count / sample.outcomes.Total_Reads : 0) : count;
+            });
+        });
+        // The five unstacked alignment-fate charts share a fixed percentage scale.
+        chart.options.scales.x.min = 0;
+        if (percent && !stacked) {
+            chart.options.scales.x.max = 100;
+        } else {
+            delete chart.options.scales.x.max;
+        }
+        chart.options.scales.x.title.text = percent ? 'Percentage of all reads (%)' : 'Count';
+        chart.options.scales.x.ticks = {callback: value => percent ? `${value}%` : value};
+        chart.options.plugins.tooltip = {callbacks: {label: context =>
+            `${context.dataset.label}: ${percent ? context.parsed.x.toFixed(2) + '%' : context.parsed.x.toLocaleString()}`}};
+        chart.update('none');
+    }
+    mode.addEventListener('change', updateDisplay);
+    updateDisplay();
 }
-stacked('fatechart', [
+barChart('fatechart', [
     ['No Alignment', o => o.No_Alignment], ['Primary Alignment', o => o.Primary_Alignment],
     ['Secondary Alignment', o => o.Secondary_Alignment]
 ]);
-stacked('alignmentchart', [
-    ['Full Transcript Match', o => o.Unique],
-    ['Partial Transcript Only', o => o.Partial - o.Unique],
-    ['Gene Only', o => o.Gene - o.Partial],
-    ['Multi Gene Match', o => o.Multi_Gene],
-    ['No Gene Match', o => o.No_Gene], ['No Transcript Hit', o => o.No_Hit]
-]);
-stacked('strandchart', [
+barChart('fullchart', [['Full Transcript Match', o => o.Unique, categoryColors[0]]], false);
+barChart('partialchart', [['Partial Unique Transcript Match', o => o.Partial, categoryColors[1]]], false);
+barChart('genechart', [['Unique Gene Match', o => o.Gene, categoryColors[2]]], false);
+barChart('multigenechart', [['Multi Gene Match', o => o.Multi_Gene, categoryColors[3]]], false);
+barChart('nogenchart', [['No Gene Match', o => o.No_Gene, categoryColors[4]]], false);
+barChart('strandchart', [
     ['Same Strand Matches', o => o.Same_Strand_Hit],
     ['Opposing Strand Matches', o => o.Opposing_Strand_Hit]
 ]);
