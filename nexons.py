@@ -36,6 +36,7 @@ def main():
     gene_index = build_index(genes_transcripts_exons)
 
     results = []
+    qc_samples = []
 
     # Ordered results keep the aggregated columns aligned with the input BAMs.
     with ExitStack() as stack:
@@ -53,10 +54,14 @@ def main():
         for bam_file, result in zip(options.bam, file_results):
             read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations,coverage = result
             results.append(quantitations)
+            qc_samples.append({"file": bam_file, "outcomes": outcomes,
+                               "read_lengths": read_lengths, "end_flex": endflex_observations,
+                               "inner_flex": innerflex_observations, "coverage": coverage})
             write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
             write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
+    write_combined_qc_report(qc_samples, options, options.outbase)
 
 def initialise_file_worker(genes, index, worker_options):
     """Install read-only annotation data and CLI options once per process."""
@@ -168,6 +173,31 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, covera
 
     with open(outfile,"wt",encoding="utf8") as out:
         out.write(template_text)
+
+
+
+def write_combined_qc_report(samples, options, outbase):
+    """Render all per-sample QC counts and distributions in input order."""
+    template = Path(__file__).parent / "templates/nexons_combined_qc_template.html"
+    names = [Path(sample["file"]).stem for sample in samples]
+    metrics = list(dict.fromkeys(key for sample in samples for key in sample["outcomes"]))
+    table = '<thead><tr><th>Sample</th>' + ''.join(
+        '<th>' + html.escape(key.replace('_', ' ')) + '</th>' for key in metrics) + '</tr></thead><tbody>'
+    for name, sample in zip(names, samples):
+        table += '<tr><th scope="row" title="' + html.escape(sample["file"], quote=True) + '">' + html.escape(name) + '</th>'
+        table += ''.join(f'<td>{sample["outcomes"].get(key, 0):,}</td>' for key in metrics) + '</tr>'
+    table += '</tbody>'
+    option_rows = '<tr><td>Nexons version</td><td>' + html.escape(VERSION) + '</td></tr>'
+    for key, value in vars(options).items():
+        if key not in ("bam", "verbose", "quiet", "suppress_warnings"):
+            option_rows += '<tr><td>' + html.escape(key) + '</td><td>' + html.escape(str(value)) + '</td></tr>'
+    # Escaping < prevents sample names from terminating the JSON script element.
+    payload = json.dumps({"names": names, "samples": samples}, allow_nan=False).replace("<", chr(92) + "u003c")
+    text = template.read_text(encoding="utf8")
+    for token, value in (("%%OPTIONS%%", option_rows), ("%%METRICS%%", table),
+                         ("%%BAMFILE%%", "Combined QC"), ("%%DATA%%", payload)):
+        text = text.replace(token, value)
+    Path(outbase + "_combined_qc.html").write_text(text, encoding="utf8")
 
 
 def write_output(genes, quantitations, bam_files, outbase):

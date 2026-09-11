@@ -58,6 +58,14 @@ options:
 
 # Output files
 
+## `<outbase>_combined_qc.html`
+An additional QC report comparing all samples from the run, in input order.
+It includes every outcome count, stacked horizontal charts for read fate,
+alignment fate and directionality, and a line per sample for read lengths,
+transcript coverage and exon flexibility. Alignment stacks separate full,
+partial-only and gene-only matches to avoid double counting. Like the individual
+reports, charts load Chart.js from the CDN and need an internet connection.
+
 ## ```nexons_output_unique.txt```
 A count table of unique hits which span the full length of a transcript in the GTF file
 
@@ -69,4 +77,3 @@ A gene level count table including all hits where a read matches part of a trans
 
 ## ```nexons_output_[filename]_qc.html```
 An HTML QC report summarising the matches found in each file
-

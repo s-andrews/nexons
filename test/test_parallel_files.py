@@ -1,5 +1,7 @@
 """CLI integration coverage for concurrent BAM files and ordered aggregation."""
 from pathlib import Path
+import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -36,6 +38,13 @@ class ParallelFilesTests(unittest.TestCase):
                     *inputs, '--parallel', str(jobs), '--outbase', str(root / f'out{jobs}')],
                     capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
+            for jobs in (1, 2):
+                report = (root / f'out{jobs}_combined_qc.html').read_text()
+                self.assertNotIn('%%', report)
+                data = json.loads(re.search(r'<script id="qc-data" type="application/json">(.*?)</script>', report, re.S).group(1))
+                self.assertEqual(data['names'], ['z', 'a'])
+                self.assertEqual([sample['outcomes']['Total_Reads'] for sample in data['samples']], [7, 3])
+                self.assertEqual(report.count('<canvas '), 7)
             for category in ('unique', 'partial', 'gene'):
                 serial = (root / f'out1_{category}.txt').read_text()
                 self.assertEqual(serial, (root / f'out2_{category}.txt').read_text())
