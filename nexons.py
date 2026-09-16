@@ -718,8 +718,6 @@ def gene_matches(exons,gene,flex,endflex):
         success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
         
         if success:
-
-            breakpoint()
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
 
