@@ -718,6 +718,8 @@ def gene_matches(exons,gene,flex,endflex):
         success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
         
         if success:
+
+            breakpoint()
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
 
@@ -1278,8 +1280,8 @@ def get_options():
 
     parser.add_argument(
         "--flex","-f",
-        help="How many bases different can exon boundaries be and still merge them (default 10)",
-        default=10, 
+        help="How many bases different can exon boundaries be and still merge them (default 3)",
+        default=3, 
         type=int
     )
 
