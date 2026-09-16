@@ -452,8 +452,14 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
 
         # We want the surrounding genes.  We shorten the read by the amount of 
         # endflex so that we still find genes which surround us if we don't 
-        # have perfectly positioned ends.
-        possible_genes = get_possible_genes(index, read.reference_name, min(read.reference_start+endflex,read.reference_end), max(read.reference_end-endflex,read.reference_start), gene_direction)
+        # have perfectly positioned ends.  
+        
+        # The maximum flex we can use is either the default flex, or half the
+        # distance between end and start (minus 1)
+            
+        used_flex = min(endflex, int((read.reference_end-read.reference_start)/2)+1)
+
+        possible_genes = get_possible_genes(index, read.reference_name, read.reference_start+used_flex, read.reference_end-used_flex, gene_direction)
 
         if not possible_genes:
             outcomes["No_Gene"] += 1
