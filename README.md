@@ -37,8 +37,10 @@ Each worker holds annotation data, so higher concurrency uses more memory.
 ## Additional options
 
 ```
-usage: nexons.py [-h] [--maxtsl MAXTSL] [--outbase OUTBASE] [--flex FLEX] [--endflex ENDFLEX] 
-[--direction DIRECTION] [--verbose] [--quiet] [--suppress_warnings] [--version] gtf bam [bam ...]
+usage: nexons.py [-h] [--parallel PARALLEL] [--maxtsl MAXTSL] [--outbase OUTBASE] [--flex FLEX]
+                 [--endflex ENDFLEX] [--direction DIRECTION] [--allqc] [--noannotate] [--verbose] [--quiet]
+                 [--suppress_warnings] [--version]
+                 gtf bam [bam ...]
 
 positional arguments:
   gtf                   A GTF file containing the genes you want to analyse
@@ -46,17 +48,21 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-
-  --maxtsl MAXTSL       Maximum transcript support level to analyse
-
-  --outbase -o          The basename for the output count tables. All outputs will start with this prefix
-
-  --flex -f             How many bases different can exon boundaries be and still merge them
-
-  --endflex -e          How many bases different can transcript ends be and still merge them
-  --direction -d        The directionality of the library (none, same, opposing)
+  --parallel PARALLEL   Number of BAM files to process concurrently (default 1)
+  --maxtsl MAXTSL       Maximum transcript support level to analyse (default 2)
+  --outbase OUTBASE, -o OUTBASE
+                        The basename for the output count tables. All outputs will start with this prefix (default
+                        ./nexons_output)
+  --flex FLEX, -f FLEX  How many bases different can exon boundaries be and still merge them (default 3)
+  --endflex ENDFLEX, -e ENDFLEX
+                        How many bases different can transcript ends be and still merge them (default 5000)
+  --direction DIRECTION, -d DIRECTION
+                        The directionality of the library [none, same, opposing] (default none)
+  --allqc               Write individual sample QC HTML reports as well as the combined report
+  --noannotate          Skip the production of annotated BAM files
   --verbose, -v         Produce more verbose output
   --quiet               Suppress all messages
+  --suppress_warnings   Suppress warnings (eg about lack of names or ids)
   --version             Print version and exit
 ```
 
