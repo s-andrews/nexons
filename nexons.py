@@ -30,6 +30,7 @@ def main():
 
     genes_transcripts_exons = read_gtf(options.gtf, options.maxtsl)
 
+
     # We should probably build an index so that we can find genes close to reads
     # quickly and efficiently.  This would just be a data structure with a certain
     # resolution which finds all genes within a defined segment of the genome.
@@ -1305,7 +1306,7 @@ def get_options():
     )
 
     parser.add_argument(
-        "--no-prefer-complete", type=bool, action="store_true",
+        "--no-prefer-complete", action="store_true",
         help="Treat complete and incomplete matches as equally valid",
     )
 
