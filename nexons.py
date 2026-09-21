@@ -735,7 +735,47 @@ def gene_matches(exons,gene,flex,endflex):
                 best_end_percentile = end_percent
 
             else:
-                status = "multi"
+                # What we do here depends on an option. If we have a partial 
+                # match and a unique match then we'll prefer the unique unless
+                # they have set --no-prefer-complete
+
+                if options.no_prefer_complete:
+                    # If this match is partial and the original is unique
+                    # then we ignore this
+                    if status=="unique" and partial:
+                        continue
+
+                    # If this match is unique and the original is partial
+                    # then replace the original match with this one
+                    if status != "unique" and not partial:
+                        status="unique"
+                        matched_transcript = transcript["id"]
+                        best_endflex = endflex_observed
+                        best_innerflex = innerflex_observed
+                        best_start_percentile = start_percent
+                        best_end_percentile = end_percent
+
+
+                    # If this match is partial and so was the previous one
+                    # then we need a new status "partial_multi" so we can
+                    # override it with a subsequent unique but we'll convert 
+                    # it to a multi at the end
+                    if partial and status=="partial":
+                        status="partial_multi"
+
+                    # Finally if the previous is unique and so is this then
+                    # it's a multi match
+                    if not partial and status=="unique":
+                        status="multi"
+
+                else:
+                    status = "multi"
+
+    # Before we go on - if we've ended up with a status of partial_multi
+    # then we need to turn it into a true multi status since there's no
+    # rescuing it at this point
+    if status=="partial_multi":
+        status="multi"
 
     # If we get here and we've not matched any transcripts we could still match
     # the gene as a whole, either from a different splicing pattern, or from
@@ -1262,6 +1302,11 @@ def get_options():
         help="Maximum transcript support level to analyse (default 2)",
         type=int,
         default=2
+    )
+
+    parser.add_argument(
+        "--no-prefer-complete", type=bool, action="store_true",
+        help="Treat complete and incomplete matches as equally valid",
     )
 
     parser.add_argument(
