@@ -10,7 +10,12 @@ import argparse
 from collections import Counter, defaultdict
 import csv
 import gzip
+import html
 from itertools import combinations
+import json
+from pathlib import Path
+import re
+import shlex
 import sys
 
 
@@ -98,17 +103,23 @@ def read_gtf(path, max_tsl=2, chromosome=None):
 
 
 def pair_distances(groups, counter, cap, width=1, exclude_equal=False):
+    zero_count = 0
     for entries in groups.values():
         for (tid_a, end_a), (tid_b, end_b) in combinations(entries, 2):
             if tid_a == tid_b:
                 continue
             distance = abs(end_a - end_b)
+            if distance == 0:
+                zero_count += 1
             if exclude_equal and distance == 0:
                 continue
             counter[min(distance, cap) // width * width] += 1
+    return zero_count
 
 
-def collect_metrics(genes, gene_types):
+def collect_metrics(genes, gene_types, zero_counts=None):
+    if zero_counts is None:
+        zero_counts = Counter()
     metrics = {name: Counter() for name in (
         'Gene Count', 'Transcript Count', 'Transcripts Per Gene',
         'Exons Per Transcript', 'Mature Transcript Length',
@@ -135,8 +146,11 @@ def collect_metrics(genes, gene_types):
                 start, end = directed[-1]
                 ends[(strand, start)].append((tid, end))
         pair_distances(internal, metrics['Alternate Splice Length'], 100, exclude_equal=True)
-        pair_distances(starts, metrics['Transcript Start Length'], 1000)
-        pair_distances(ends, metrics['Transcript End Length'], 10000, width=10)
+        for metric, groups, cap, width in (
+            ('Transcript Start Length', starts, 1000, 1),
+            ('Transcript End Length', ends, 10000, 10),
+        ):
+            zero_counts[metric] += pair_distances(groups, metrics[metric], cap, width)
     return metrics
 
 
@@ -162,21 +176,71 @@ def write_metrics(metrics, handle):
             writer.writerow((metric, label, counts[key]))
 
 
+def write_html(metrics, args, command, zero_counts=None):
+    """Embed report data safely in the Bootstrap/Chart.js report template."""
+    doughnuts = []
+    for metric in ('Gene Count', 'Transcript Count'):
+        counts = metrics[metric]
+        labels = sorted((key for key in counts if key.startswith('Biotype: ')),
+                        key=lambda key: (-counts[key], key))
+        doughnuts.append({'title': metric.replace('Count', 'Biotypes'),
+                         'labels': [key.removeprefix('Biotype: ') for key in labels],
+                         'counts': [counts[key] for key in labels]})
+    lines = []
+    for metric, xlabel, ylabel, width, cap in (
+        ('Transcripts Per Gene', 'Transcripts per gene', 'Genes', 1, None),
+        ('Exons Per Transcript', 'Exons per transcript', 'Transcripts', 1, None),
+        ('Mature Transcript Length', 'Mature transcript length (bp)', 'Transcripts', 100, None),
+        ('Alternate Splice Length', 'Alternate splice distance (bp)', 'Exon pairs', 1, 100),
+        ('Transcript Start Length', 'Alternate start distance (bp)', 'Transcript pairs', 1, 1000),
+        ('Transcript End Length', 'Alternate end distance (bp)', 'Transcript pairs', 10, 10000),
+    ):
+        counts = metrics[metric]
+        keys = sorted(counts)
+        if cap is not None:
+            keys = list(range(1 if metric == 'Alternate Splice Length' else 0, cap + 1, width))
+        else:
+            # Keep large sparse distributions compact without drawing across empty bins.
+            padded = set(keys)
+            for left, right in zip(keys, keys[1:]):
+                if right - left > width:
+                    padded.update((left + width, right - width))
+            keys = sorted(padded)
+        lines.append({'title': metric, 'xlabel': xlabel, 'ylabel': ylabel,
+                      'width': width, 'cap': cap,
+                      'zeroCount': (zero_counts or {}).get(metric, 0),
+                      'points': [{'x': key, 'y': counts[key]} for key in keys]})
+    summary = [('File analysed', args.gtf), ('Command line', command),
+               ('Maximum TSL', args.maxtsl if args.maxtsl else 'Disabled (0)'),
+               ('Chromosome', args.chromosome or 'All chromosomes'),
+               ('Output prefix', args.outbase),
+               ('Total genes', metrics['Gene Count']['All Genes']),
+               ('Total transcripts', metrics['Transcript Count']['All Transcripts'])]
+    rows = '\n'.join(f'<tr><th scope="row">{html.escape(label)}</th>'
+                     f'<td>{html.escape(str(value))}</td></tr>' for label, value in summary)
+    data = json.dumps({'doughnuts': doughnuts, 'lines': lines}).replace('<', '\\u003c')
+    template = Path(__file__).parent / 'templates/nexons_gtf_stats_template.html'
+    report = template.read_text(encoding='utf8')
+    replacements = {'%%SUMMARY%%': rows, '%%DATA%%': data}
+    report = re.sub(r'%%(?:SUMMARY|DATA)%%', lambda match: replacements[match[0]], report)
+    Path(str(args.outbase) + '.html').write_text(report, encoding='utf8')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('gtf', help='Input GTF or gzipped GTF')
     parser.add_argument('--maxtsl', type=int, default=2,
                         help='Maximum transcript support level (default 2; 0 disables filtering)')
     parser.add_argument('--chromosome', '--chrom', help='Process one chromosome (exact name; input must be grouped by chromosome)')
-    parser.add_argument('-o', '--output', default='nexons_gtf_stats.tsv', help='Output TSV (default nexons_gtf_stats.tsv; - for stdout)')
+    parser.add_argument('-o', '--outbase', default='nexons_gtf_stats',
+                        help='Output prefix; appends .txt and .html (default nexons_gtf_stats)')
     args = parser.parse_args()
     genes, gene_types = read_gtf(args.gtf, args.maxtsl, args.chromosome)
-    metrics = collect_metrics(genes, gene_types)
-    if args.output == '-':
-        write_metrics(metrics, sys.stdout)
-    else:
-        with open(args.output, 'w', encoding='utf8', newline='') as handle:
-            write_metrics(metrics, handle)
+    zero_counts = Counter()
+    metrics = collect_metrics(genes, gene_types, zero_counts)
+    with open(args.outbase + '.txt', 'w', encoding='utf8', newline='') as handle:
+        write_metrics(metrics, handle)
+    write_html(metrics, args, shlex.join(sys.argv), zero_counts)
 
 
 if __name__ == '__main__':

@@ -91,3 +91,49 @@ A gene level count table including all hits where a read matches part of a trans
 ## ```nexons_output_[filename]_qc.html```
 Created only when `--allqc` is supplied.
 An HTML QC report summarising the matches found in each file
+
+### GTF annotation statistics
+
+Run `nexons_gtf_stats.py` to produce a three-column TSV (`Metric`, `Value`,
+`Count`) from a GTF or gzipped GTF:
+
+```bash
+python3 nexons_gtf_stats.py annotation.gtf.gz --maxtsl 2 --outbase annotation_stats
+python3 nexons_gtf_stats.py annotation.gtf.gz --chromosome chr1 --outbase chr1_stats
+```
+
+The output prefix is set with `--outbase` (or `-o`), defaulting to
+`nexons_gtf_stats`. Each run writes `<outbase>.txt` (tab-delimited metrics) and
+`<outbase>.html` (an interactive report). The report includes the input file,
+command and effective options, totals, biotype doughnut charts, and distribution
+line charts. Drag, Ctrl-scroll or pinch to zoom on each line chart’s x axis;
+Shift-drag pans, and Reset zoom restores the full range. Like the other Nexons
+reports, the HTML loads Bootstrap and Chart.js from a CDN and requires an
+internet connection for chart libraries (including the zoom plugin).
+TSL filtering matches `nexons.py`: the default maximum is 2, missing or `NA`
+TSLs are excluded, and MANE_Select, Ensembl_Canonical, gencode_primary and
+ gencode_basic annotations are treated as TSL 1. `--maxtsl 0` disables filtering.
+Filtering applies to exon records, as in the main script. Counts include only
+transcripts with retained exons and genes containing those transcripts.
+`--chromosome` (also `--chrom`) requires the exact chromosome name and stops at
+the next chromosome after the selected block; the input must be grouped by
+chromosome.
+
+Gene/transcript counts include biotypes from `gene_biotype`/`gene_type` and
+`transcript_biotype`/`transcript_type`, including attributes on gene and transcript
+records. Missing transcript biotypes fall back to the gene biotype; otherwise
+missing biotypes are labelled `unknown`.
+
+Exon lengths include both endpoints. Mature transcript lengths use 100 bp bins
+labelled `0-99bp`, `100-199bp`, etc. Pair comparisons are unordered, within a gene
+and strand, with first/last exons determined in transcript direction. Internal
+alternate splice comparisons exclude first/last exons and identical ends.
+Terminal comparisons require multi-exon transcripts and include identical
+boundaries in the zero bin. Each qualifying transcript/exon pair contributes;
+shared events across multiple pairs are counted multiple times.
+
+Alternate splice lengths use single-base bins, ending in `100+bp`. Transcript
+start lengths use single-base bins ending in `1000+bp`. Transcript end lengths
+use `0-9bp`, `10-19bp`, etc., ending in `10000+bp`. Final categories include the
+cap itself and all larger distances. These three distance histograms include
+zero-count bins; other distributions report observed bins only.

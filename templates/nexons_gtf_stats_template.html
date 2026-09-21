@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+
+
+    <style>
+        .sectionhead {
+            background-color: #333333;
+            color: white;
+            margin-top: 2em;
+            margin-bottom: 1em;
+            width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #options td{
+            font-family: monospace;
+            text-align: left;
+        }
+        #bamname {
+            font-family: monospace;
+        }
+    </style>
+
+    <title>Nexons GTF Statistics</title>
+    <style>
+        .chart-container { position: relative; height: 400px; }
+        #options { max-width: 1100px; margin: auto; }
+        #options td { overflow-wrap: anywhere; }
+        #options th { text-align: left; width: 12em; }
+    </style>
+</head>
+<body>
+<div class="container-fluid text-center pb-4">
+<header class="row align-items-center justify-content-center my-3">
+<div class="col-md-3"><svg width="250" height="100" viewBox="0 0 132.29166 52.916665" version="1.1" id="svg1"
+                    xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+                    <defs id="defs1" />
+                    <g id="layer1">
+                        <path
+                            d="M 24.451724,44.705101 H 22.16849 L 12.226907,17.330072 V 44.705101 H 9.1112432 V 7.4836242 H 11.584747 L 21.336061,34.382979 V 7.4836242 h 3.115663 z m 28.040972,-2.687557 q 0,2.687557 -2.663774,2.687557 h -7.610781 q -2.663773,0 -2.663773,-2.687557 V 24.251127 q 0,-2.687558 2.663773,-2.687558 h 7.610781 q 2.663774,0 2.663774,2.687558 v 8.324291 l -1.070266,1.117834 h -8.799966 v 8.371859 H 49.4246 v -4.233497 h 3.068096 z M 49.4246,31.172181 v -6.968622 h -6.802136 v 6.968622 z m 20.858297,13.53292 h -3.210798 l -3.900526,-9.156721 -3.948092,9.156721 h -3.115664 v -0.09513 L 61.506715,32.813255 56.440789,21.563569 h 3.210798 l 3.567554,8.490778 3.662688,-8.490778 h 3.068096 v 0.09513 l -5.065926,11.059417 z m 16.862642,-2.687557 q 0,2.687557 -2.687558,2.687557 h -7.943752 q -2.663774,0 -2.663774,-2.687557 V 24.251127 q 0,-2.687558 2.663774,-2.687558 h 7.943752 q 2.687558,0 2.687558,2.687558 z m -3.163231,-0.09513 V 24.346261 h -6.968622 v 17.576148 z m 21.619372,2.782692 h -3.16323 V 24.393829 l -6.968625,0.190269 V 44.705101 H 92.306594 V 21.563569 h 3.163231 v 0.64216 q 1.855128,-0.237837 3.734039,-0.499457 2.283236,-0.285405 3.757826,-0.285405 2.63999,0 2.63999,2.592423 z m 17.57614,-2.687557 q 0,2.687557 -2.68755,2.687557 h -7.25403 q -2.68756,0 -2.68756,-2.687557 v -5.256196 h 3.11567 v 5.208629 h 6.39781 V 37.35594 l -8.27672,-6.778352 q -1.18919,-0.951347 -1.18919,-2.473503 v -3.852958 q 0,-2.687558 2.68756,-2.687558 h 7.15889 q 2.68756,0 2.68756,2.687558 v 4.614036 h -3.0681 v -4.566469 h -6.39781 v 4.043227 l 8.34807,6.778352 q 1.1654,0.927564 1.1654,2.521072 z"
+                            id="text1"
+                            style="font-size:48.709px;font-family:'Agency FB';-inkscape-font-specification:'Agency FB, Normal';stroke-width:4.05907"
+                            aria-label="N exons" />
+                        <rect style="fill:#666666;stroke-width:0.263344" id="rect1" width="21.899748" height="9.3152132"
+                            x="39.560234" y="7.4758248" />
+                        <rect style="fill:#666666;stroke-width:0.192967" id="rect2" width="11.758718" height="9.3152132"
+                            x="70.161438" y="7.4758248" />
+                        <rect style="fill:#666666;stroke-width:0.288807" id="rect3" width="26.339529" height="9.3152132"
+                            x="96.840897" y="7.4758248" />
+                        <path id="path3" style="fill:none;stroke:#666666;stroke-width:1;stroke-dasharray:none"
+                            d="m 61.043934,16.537914 2.387295,-4.025844 2.38731,-4.025848 2.3873,4.025848 2.38733,4.025844" />
+                        <path id="path5" style="fill:none;stroke:#666666;stroke-width:1;stroke-dasharray:none"
+                            d="m 81.544269,16.455791 3.91719,-4.280945 3.91726,-4.280948 3.91723,4.280948 3.91723,4.280945" />
+                        <g id="g24" transform="matrix(0.75932221,0,0,0.94110391,16.36653,-14.014015)"
+                            style="stroke-width:1.18295;stroke-dasharray:none">
+                            <g id="g27" style="fill:#666666;stroke:#666666">
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path24"
+                                    transform="matrix(-1.2394,0,0,0.99999999,32.851945,8.0999999e-7)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path25"
+                                    transform="matrix(-1.2394,0,0,0.99999999,44.151139,8.0999999e-7)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path10"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,46.863156)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path12"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,80.559777)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path14"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,53.60248)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path16"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,60.341804)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path18"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,67.081129)" />
+                                <path
+                                    style="fill:#666666;stroke:#666666;stroke-width:2.01037;stroke-dasharray:none;stroke-opacity:1"
+                                    d="M 14.345636,29.63197 V 69.141265" id="path20"
+                                    transform="matrix(0,-1,-0.34624437,0,37.78541,73.820453)" />
+                            </g>
+                        </g>
+                    </g>
+                </svg></div>
+<div class="col-md-6"><h1>Nexons GTF Statistics</h1></div>
+</header>
+<table id="options" class="table table-striped table-bordered">
+<caption class="visually-hidden">Input, analysis options and retained gene and transcript totals</caption>
+<tbody>%%SUMMARY%%</tbody>
+</table>
+<p class="mt-3">Counts include genes and transcripts with exons retained after TSL filtering.</p>
+<noscript><p class="alert alert-warning">Enable JavaScript to view the charts.</p></noscript>
+<p id="chart-error" class="alert alert-warning" hidden>Chart libraries could not load. Connect to the internet and reload this report.</p>
+<div class="sectionhead"><h2>Biotypes</h2></div>
+<div id="biotypes" class="row justify-content-center"></div>
+<div class="sectionhead"><h2>Distributions</h2></div>
+<p>Drag across a plot, Ctrl-scroll, or pinch to zoom on the x axis. Shift-drag to pan. Use Reset zoom to restore the full range.</p>
+<p>Length bins include both endpoints; the final distance bin includes the cap and all larger distances.
+Hover over a point to see its bin and count.</p>
+<div id="distributions" class="row justify-content-center"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+<script id="stats-data" type="application/json">%%DATA%%</script>
+<script>
+const report = JSON.parse(document.getElementById('stats-data').textContent);
+const colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#777777'];
+function panel(parent, title) {
+    const section = document.createElement('section');
+    section.className = 'col-lg-5 col-md-6 mb-4';
+    const heading = document.createElement('h3');
+    heading.className = 'h5';
+    heading.textContent = title;
+    section.appendChild(heading);
+    const container = document.createElement('div');
+    container.className = 'chart-container';
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', title);
+    container.appendChild(canvas);
+    section.appendChild(container);
+    document.getElementById(parent).appendChild(section);
+    return {section, canvas};
+}
+function emptyNote(section) {
+    const note = document.createElement('p');
+    note.textContent = 'No qualifying data for this chart.';
+    section.appendChild(note);
+}
+function binLabel(series, x) {
+    if (series.cap !== null && x === series.cap) return `${x}+ bp`;
+    if (series.width > 1) return `${x}–${x + series.width - 1} bp`;
+    return series.cap !== null ? `${x} bp` : String(x);
+}
+try {
+    report.doughnuts.forEach(series => {
+        const {section, canvas} = panel('biotypes', series.title);
+        if (!series.counts.length) emptyNote(section);
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {labels: series.labels, datasets: [{data: series.counts,
+                backgroundColor: series.labels.map((_, i) => colors[i] || `hsl(${i * 137.508 % 360}, 65%, 42%)`)}]},
+            options: {responsive: true, maintainAspectRatio: false,
+                plugins: {legend: {position: 'bottom'}, tooltip: {callbacks: {
+                    label: context => {
+                        const total = series.counts.reduce((a, b) => a + b, 0);
+                        const percent = total ? (100 * context.parsed / total).toFixed(1) : '0.0';
+                        return `${context.label}: ${context.parsed.toLocaleString()} (${percent}%)`;
+                    }
+                }}}}
+        });
+    });
+    report.lines.forEach(series => {
+        const {section, canvas} = panel('distributions', series.title);
+        if (!series.points.some(point => point.y > 0)) emptyNote(section);
+        const chart = new Chart(canvas, {
+            type: 'line',
+            data: {datasets: [{label: series.ylabel, data: series.points,
+                borderColor: '#377eb8', backgroundColor: '#377eb8', borderWidth: 2,
+                pointRadius: series.points.length < 100 ? 2 : 0, pointHitRadius: 8, tension: 0}]},
+            options: {responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {x: {type: 'linear', title: {display: true, text: series.xlabel},
+                    ticks: {precision: 0}},
+                    y: {beginAtZero: true, title: {display: true, text: series.ylabel}, ticks: {precision: 0}}},
+                plugins: {legend: {display: false},
+                    tooltip: {callbacks: {title: items => binLabel(series, items[0].parsed.x)}},
+                    zoom: {
+                        limits: {x: {min: 'original', max: 'original', minRange: series.width}},
+                        pan: {enabled: true, mode: 'x', modifierKey: 'shift'},
+                        zoom: {mode: 'x', wheel: {enabled: true, modifierKey: 'ctrl'},
+                            drag: {enabled: true}, pinch: {enabled: true}}
+                    }
+                }}
+        });
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'btn btn-outline-secondary btn-sm mt-2';
+        reset.textContent = 'Reset zoom';
+        reset.setAttribute('aria-label', `Reset zoom for ${series.title}`);
+        reset.addEventListener('click', () => chart.resetZoom());
+        section.appendChild(reset);
+        if (['Transcript Start Length', 'Transcript End Length'].includes(series.title)) {
+            let excludeZero = false;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'btn btn-outline-secondary btn-sm mt-2 ms-2';
+            toggle.textContent = 'Exclude zero';
+            toggle.setAttribute('aria-pressed', 'false');
+            toggle.title = 'Exclude exact zero differences; retain 1–9 bp differences in the end-length bin';
+            toggle.addEventListener('click', () => {
+                excludeZero = !excludeZero;
+                chart.data.datasets[0].data = series.points.map(point => ({
+                    x: point.x,
+                    y: excludeZero && point.x === 0 ? point.y - series.zeroCount : point.y
+                }));
+                toggle.textContent = excludeZero ? 'Include zero' : 'Exclude zero';
+                toggle.setAttribute('aria-pressed', String(excludeZero));
+                // Restore the full x range and recalculate y from the displayed counts.
+                chart.resetZoom();
+                chart.update('none');
+            });
+            section.appendChild(toggle);
+        }
+    });
+    if (!Chart.registry.plugins.get('zoom')) throw new Error('Zoom plugin unavailable');
+} catch (error) {
+    document.getElementById('chart-error').hidden = false;
+    console.error(error);
+}
+</script>
+</body>
+</html>
