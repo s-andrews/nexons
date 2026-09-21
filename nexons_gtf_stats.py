@@ -217,20 +217,20 @@ def write_html(metrics, args, command, zero_counts=None):
     terminal_counting = ('Each distinct pair of positions is counted once per gene.'
                          if args.distinct else 'Each qualifying transcript pair is counted once.')
     descriptions = {
-        'Transcripts Per Gene': 'Number of genes with each number of retained transcripts.',
-        'Exons Per Transcript': 'Number of transcripts with each number of retained exons.',
-        'Mature Transcript Length': 'Number of transcripts by summed exon length, excluding introns, in 100 bp bins.',
-        'Alternate Splice Length': 'Distances between different exon ends sharing the same start in different transcripts of a gene. First and last exons are excluded; boundaries follow transcript direction.',
-        'Transcript Start Length': 'Distances between transcript starts within a gene, using multi-exon transcripts whose first exons share an end, in transcript direction. ' + terminal_counting,
-        'Transcript End Length': 'Distances between transcript ends within a gene, using multi-exon transcripts whose last exons share a start, in transcript direction. ' + terminal_counting,
+        'Transcripts Per Gene': 'How many transcripts does each gene have.',
+        'Exons Per Transcript': 'How many exons are in each transcript.',
+        'Mature Transcript Length': 'The overall length of mature transcripts after splicing (100bp resolution).',
+        'Alternate Splice Length': 'Absolute distance between splice donor sites for exons of different isoforms which start at the same position.',
+        'Transcript Start Length': 'Absolute distance between transcript start sites for first exons with identical splice donor site positions. ' + terminal_counting,
+        'Transcript End Length': 'Absolute distance between terminator positions for terminal exons with identical splice acceptor site positions. ' + terminal_counting,
     }
     for metric, xlabel, ylabel, width, cap in (
         ('Transcripts Per Gene', 'Transcripts per gene', 'Genes', 1, None),
         ('Exons Per Transcript', 'Exons per transcript', 'Transcripts', 1, None),
         ('Mature Transcript Length', 'Mature transcript length (bp)', 'Transcripts', 100, None),
-        ('Alternate Splice Length', 'Alternate splice distance (bp)', 'Exon pairs', 1, 100),
-        ('Transcript Start Length', 'Alternate start distance (bp)', 'Transcript pairs', 5, 1000),
-        ('Transcript End Length', 'Alternate end distance (bp)', 'Transcript pairs', 50, 10000),
+        ('Alternate Splice Length', 'Distance to alternate donor (bp)', 'Exon pairs', 1, 100),
+        ('Transcript Start Length', 'Distance to alternate TSS (bp)', 'Transcript pairs', 5, 1000),
+        ('Transcript End Length', 'Distance to alternate Terminator (bp)', 'Transcript pairs', 50, 10000),
     ):
         counts = metrics[metric]
         keys = sorted(counts)
