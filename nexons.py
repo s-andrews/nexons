@@ -30,6 +30,10 @@ def main():
 
     genes_transcripts_exons = read_gtf(options.gtf, options.maxtsl)
 
+    if not options.no_remove_dups:
+        lof("Removing duplicate transcripts")
+        remove_duplicate_transcripts(genes_transcripts_exons)
+
 
     # We should probably build an index so that we can find genes close to reads
     # quickly and efficiently.  This would just be a data structure with a certain
@@ -42,7 +46,9 @@ def main():
 
     # Ordered results keep the aggregated columns aligned with the input BAMs.
     with ExitStack() as stack:
+
         initialise_file_worker(genes_transcripts_exons, gene_index, options)
+
         if options.parallel > 1 and len(options.bam) > 1:
             pool = stack.enter_context(ProcessPoolExecutor(
                 max_workers=min(options.parallel, len(options.bam)),
@@ -50,6 +56,7 @@ def main():
                 initializer=initialise_file_worker,
                 initargs=(genes_transcripts_exons, gene_index, options)))
             file_results = pool.map(process_file_job, enumerate(options.bam))
+
         else:
             file_results = map(process_file_job, enumerate(options.bam))
 
@@ -1112,6 +1119,83 @@ def get_exons(read):
 
     return exons
 
+def transcripts_equivalent(t1, t2):
+
+    a = t1["exons"]
+    b = t2["exons"]
+
+    # Different numbers of sublists cannot be equivalent
+    if len(a) != len(b):
+        return False
+
+    # Empty lists
+    if not a:
+        return True
+
+    # If each contains exactly one range, check for overlap
+    if len(a) == 1:
+        a_start, a_stop = a[0]
+        b_start, b_stop = b[0]
+
+        return max(a_start, b_start) <= min(a_stop, b_stop)
+
+    # Multiple ranges:
+    # Ignore the first start value
+    if a[0][1] != b[0][1]:
+        return False
+
+    # Compare all intermediate ranges exactly
+    if a[1:-1] != b[1:-1]:
+        return False
+
+    # Ignore the final stop value
+    if a[-1][0] != b[-1][0]:
+        return False
+
+    return True
+
+
+def remove_duplicate_transcripts(genes):
+
+    duplicate_count = 0
+
+    for gene in genes:
+
+        kept_transcripts = []
+
+        for transcript in genes[gene]["transcripts"].values():
+            keep_this_one = True
+            for kept_transcript in kept_transcripts:
+                if transcripts_equivalent(transcript,kept_transcript):
+                    duplicate_count += 1
+                    # We need to lose one of them. 
+                    # See if they're the same size
+                    if (transcript["end"] - transcript["start"]) == (kept_transcript["end"]-kept_transcript["start"]):
+                        # We keep the one with the lower alphabetical name
+                        if transcript["name"] < kept_transcript["name"]:
+                            kept_transcripts.remove(kept_transcript)
+                            break
+                        else:
+                            keep_this_one = False
+                            break
+
+                    else:
+                        # We keep the longer one
+                        if (transcript["end"] - transcript["start"]) > (kept_transcript["end"]-kept_transcript["start"]):
+                            kept_transcripts.remove(kept_transcript)
+                            break
+                        else:
+                            keep_this_one = False
+                            break
+            
+            if keep_this_one:
+                kept_transcripts.append(transcript)
+
+        genes[gene]["transcripts"] = {}
+        for transcript in kept_transcripts:
+            genes[gene]["transcripts"][transcript["id"]] = transcript    
+    
+    log(f"Removed {duplicate_count} duplicate transcripts")
 
 def read_gtf(gtf_file, max_tsl):
     debug(f"Reading GTF {gtf_file} with max_tsl {max_tsl}")
@@ -1308,6 +1392,11 @@ def get_options():
     parser.add_argument(
         "--no-prefer-complete", action="store_true",
         help="Treat complete and incomplete matches as equally valid",
+    )
+
+    parser.add_argument(
+        "--no-remove-dups", action="store_true",
+        help="Don't remove transcripts with identical splice patterns",
     )
 
     parser.add_argument(
