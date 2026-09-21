@@ -168,7 +168,7 @@ try {
             data: {labels: series.labels, datasets: [{data: series.counts,
                 backgroundColor: series.labels.map((_, i) => colors[i] || `hsl(${i * 137.508 % 360}, 65%, 42%)`)}]},
             options: {responsive: true, maintainAspectRatio: false,
-                plugins: {legend: {position: 'bottom'}, tooltip: {callbacks: {
+                plugins: {legend: {display: false}, tooltip: {callbacks: {
                     label: context => {
                         const total = series.counts.reduce((a, b) => a + b, 0);
                         const percent = total ? (100 * context.parsed / total).toFixed(1) : '0.0';
