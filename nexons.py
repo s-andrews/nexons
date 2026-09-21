@@ -1278,8 +1278,8 @@ def get_options():
 
     parser.add_argument(
         "--flex","-f",
-        help="How many bases different can exon boundaries be and still merge them (default 3)",
-        default=3, 
+        help="How many bases different can exon boundaries be and still merge them (default 2)",
+        default=2, 
         type=int
     )
 
