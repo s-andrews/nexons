@@ -102,22 +102,41 @@ def read_gtf(path, max_tsl=2, chromosome=None):
     return genes, gene_types
 
 
-def pair_distances(groups, counter, cap, width=1, exclude_equal=False):
+def pair_distances(groups, counter, cap, width=1, exclude_equal=False,
+                   distinct_positions=False):
     zero_count = 0
-    for entries in groups.values():
+    seen_pairs = set()
+    for group, entries in groups.items():
+        if distinct_positions:
+            # Collapse terminal positions within each compatible boundary group
+            # before pairing, avoiding quadratic work in transcript duplicates.
+            entries = list(enumerate(sorted({position for _, position in entries})))
         for (tid_a, end_a), (tid_b, end_b) in combinations(entries, 2):
             if tid_a == tid_b:
                 continue
+            if distinct_positions:
+                # A position pair can qualify through multiple shared boundaries;
+                # count it only once per gene and strand, not once per boundary.
+                pair = (group[0], end_a, end_b)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
             distance = abs(end_a - end_b)
             if distance == 0:
                 zero_count += 1
             if exclude_equal and distance == 0:
                 continue
-            counter[min(distance, cap) // width * width] += 1
+            if distance >= cap:
+                key = cap
+            elif distance == 0:
+                key = 0
+            else:
+                key = (distance - 1) // width * width + 1
+            counter[key] += 1
     return zero_count
 
 
-def collect_metrics(genes, gene_types, zero_counts=None):
+def collect_metrics(genes, gene_types, zero_counts=None, distinct_terminal_positions=False):
     if zero_counts is None:
         zero_counts = Counter()
     metrics = {name: Counter() for name in (
@@ -147,22 +166,29 @@ def collect_metrics(genes, gene_types, zero_counts=None):
                 ends[(strand, start)].append((tid, end))
         pair_distances(internal, metrics['Alternate Splice Length'], 100, exclude_equal=True)
         for metric, groups, cap, width in (
-            ('Transcript Start Length', starts, 1000, 1),
-            ('Transcript End Length', ends, 10000, 10),
+            ('Transcript Start Length', starts, 1000, 5),
+            ('Transcript End Length', ends, 10000, 50),
         ):
-            zero_counts[metric] += pair_distances(groups, metrics[metric], cap, width)
+            zero_counts[metric] += pair_distances(
+                groups, metrics[metric], cap, width,
+                distinct_positions=distinct_terminal_positions)
     return metrics
+
+
+def distance_bins(cap, width, include_zero=True):
+    """Positive bins start at 1; the cap is a separate overflow class."""
+    return ([0] if include_zero else []) + list(range(1, cap, width)) + [cap]
 
 
 def write_metrics(metrics, handle):
     writer = csv.writer(handle, delimiter='\t', lineterminator='\n')
     writer.writerow(('Metric', 'Value', 'Count'))
     caps = {'Alternate Splice Length': (100, 1),
-            'Transcript Start Length': (1000, 1), 'Transcript End Length': (10000, 10)}
+            'Transcript Start Length': (1000, 5), 'Transcript End Length': (10000, 50)}
     for metric, counts in metrics.items():
         if metric in caps:
             cap, width = caps[metric]
-            keys = range(1 if metric == 'Alternate Splice Length' else 0, cap + 1, width)
+            keys = distance_bins(cap, width, metric != 'Alternate Splice Length')
         else:
             keys = sorted(counts)
         for key in keys:
@@ -170,7 +196,8 @@ def write_metrics(metrics, handle):
             if metric in caps:
                 cap, width = caps[metric]
                 label = f'{key}+bp' if key == cap else (
-                    f'{key}bp' if width == 1 else f'{key}-{key + width - 1}bp')
+                    f'{key}bp' if width == 1 or key == 0 else
+                    f'{key}-{min(key + width - 1, cap - 1)}bp')
             elif metric == 'Mature Transcript Length':
                 label = f'{key}-{key + 99}bp'
             writer.writerow((metric, label, counts[key]))
@@ -187,18 +214,28 @@ def write_html(metrics, args, command, zero_counts=None):
                          'labels': [key.removeprefix('Biotype: ') for key in labels],
                          'counts': [counts[key] for key in labels]})
     lines = []
+    terminal_counting = ('Each distinct pair of positions is counted once per gene.'
+                         if args.distinct else 'Each qualifying transcript pair is counted once.')
+    descriptions = {
+        'Transcripts Per Gene': 'Number of genes with each number of retained transcripts.',
+        'Exons Per Transcript': 'Number of transcripts with each number of retained exons.',
+        'Mature Transcript Length': 'Number of transcripts by summed exon length, excluding introns, in 100 bp bins.',
+        'Alternate Splice Length': 'Distances between different exon ends sharing the same start in different transcripts of a gene. First and last exons are excluded; boundaries follow transcript direction.',
+        'Transcript Start Length': 'Distances between transcript starts within a gene, using multi-exon transcripts whose first exons share an end, in transcript direction. ' + terminal_counting,
+        'Transcript End Length': 'Distances between transcript ends within a gene, using multi-exon transcripts whose last exons share a start, in transcript direction. ' + terminal_counting,
+    }
     for metric, xlabel, ylabel, width, cap in (
         ('Transcripts Per Gene', 'Transcripts per gene', 'Genes', 1, None),
         ('Exons Per Transcript', 'Exons per transcript', 'Transcripts', 1, None),
         ('Mature Transcript Length', 'Mature transcript length (bp)', 'Transcripts', 100, None),
         ('Alternate Splice Length', 'Alternate splice distance (bp)', 'Exon pairs', 1, 100),
-        ('Transcript Start Length', 'Alternate start distance (bp)', 'Transcript pairs', 1, 1000),
-        ('Transcript End Length', 'Alternate end distance (bp)', 'Transcript pairs', 10, 10000),
+        ('Transcript Start Length', 'Alternate start distance (bp)', 'Transcript pairs', 5, 1000),
+        ('Transcript End Length', 'Alternate end distance (bp)', 'Transcript pairs', 50, 10000),
     ):
         counts = metrics[metric]
         keys = sorted(counts)
         if cap is not None:
-            keys = list(range(1 if metric == 'Alternate Splice Length' else 0, cap + 1, width))
+            keys = distance_bins(cap, width, metric != 'Alternate Splice Length')
         else:
             # Keep large sparse distributions compact without drawing across empty bins.
             padded = set(keys)
@@ -206,14 +243,19 @@ def write_html(metrics, args, command, zero_counts=None):
                 if right - left > width:
                     padded.update((left + width, right - width))
             keys = sorted(padded)
-        lines.append({'title': metric, 'xlabel': xlabel, 'ylabel': ylabel,
+        lines.append({'title': metric, 'description': descriptions[metric],
+                      'xlabel': xlabel, 'ylabel': ylabel,
                       'width': width, 'cap': cap,
                       'zeroCount': (zero_counts or {}).get(metric, 0),
                       'points': [{'x': key, 'y': counts[key]} for key in keys]})
+        if args.distinct and metric in ('Transcript Start Length', 'Transcript End Length'):
+            lines[-1]['ylabel'] = 'Distinct terminal position pairs'
     summary = [('File analysed', args.gtf), ('Command line', command),
                ('Maximum TSL', args.maxtsl if args.maxtsl else 'Disabled (0)'),
                ('Chromosome', args.chromosome or 'All chromosomes'),
                ('Output prefix', args.outbase),
+               ('Terminal counting', 'Distinct terminal position pairs per gene'
+                if args.distinct else 'All qualifying transcript pairs'),
                ('Total genes', metrics['Gene Count']['All Genes']),
                ('Total transcripts', metrics['Transcript Count']['All Transcripts'])]
     rows = '\n'.join(f'<tr><th scope="row">{html.escape(label)}</th>'
@@ -232,12 +274,14 @@ def main():
     parser.add_argument('--maxtsl', type=int, default=2,
                         help='Maximum transcript support level (default 2; 0 disables filtering)')
     parser.add_argument('--chromosome', '--chrom', help='Process one chromosome (exact name; input must be grouped by chromosome)')
+    parser.add_argument('--distinct', action='store_true',
+                        help='Count each distinct terminal position pair once per gene for start/end distances; shared-boundary rules still apply; no zero-distance pairs')
     parser.add_argument('-o', '--outbase', default='nexons_gtf_stats',
                         help='Output prefix; appends .txt and .html (default nexons_gtf_stats)')
     args = parser.parse_args()
     genes, gene_types = read_gtf(args.gtf, args.maxtsl, args.chromosome)
     zero_counts = Counter()
-    metrics = collect_metrics(genes, gene_types, zero_counts)
+    metrics = collect_metrics(genes, gene_types, zero_counts, args.distinct)
     with open(args.outbase + '.txt', 'w', encoding='utf8', newline='') as handle:
         write_metrics(metrics, handle)
     write_html(metrics, args, shlex.join(sys.argv), zero_counts)

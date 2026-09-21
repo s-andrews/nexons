@@ -133,7 +133,24 @@ boundaries in the zero bin. Each qualifying transcript/exon pair contributes;
 shared events across multiple pairs are counted multiple times.
 
 Alternate splice lengths use single-base bins, ending in `100+bp`. Transcript
-start lengths use single-base bins ending in `1000+bp`. Transcript end lengths
-use `0-9bp`, `10-19bp`, etc., ending in `10000+bp`. Final categories include the
+start lengths use `0bp`, `1-5bp`, `6-10bp`, etc., ending in `996-999bp`
+and `1000+bp`. Transcript end lengths use `0bp`, `1-50bp`, `51-100bp`, etc.,
+ending in `9951-9999bp` and `10000+bp`. Both terminal distributions keep
+exact zero differences separate; the HTML Exclude zero toggle hides that bin. Final categories include the
 cap itself and all larger distances. These three distance histograms include
 zero-count bins; other distributions report observed bins only.
+
+Use `--distinct` to count each unordered pair of distinct
+terminal positions once per gene and strand in the start/end distributions.
+Only positions represented by multi-exon transcripts with a shared first-exon
+end (for starts) or last-exon start (for ends), in transcript direction, are
+compared. A position pair qualifying through multiple shared boundaries is
+still counted once. Different position pairs with the same distance remain
+separate observations. Repeated identical positions collapse to one position,
+so this mode has no zero-distance pairs. Other metrics are unchanged; by default,
+all qualifying transcript pairs are counted. Both text and HTML outputs use the
+selected mode, which is also recorded in the HTML summary.
+
+```bash
+python3 nexons_gtf_stats.py annotation.gtf.gz --distinct --outbase distinct_stats
+```

@@ -111,9 +111,7 @@
 <div class="sectionhead"><h2>Biotypes</h2></div>
 <div id="biotypes" class="row justify-content-center"></div>
 <div class="sectionhead"><h2>Distributions</h2></div>
-<p>Drag across a plot, Ctrl-scroll, or pinch to zoom on the x axis. Shift-drag to pan. Use Reset zoom to restore the full range.</p>
-<p>Length bins include both endpoints; the final distance bin includes the cap and all larger distances.
-Hover over a point to see its bin and count.</p>
+<p>Drag across a plot, Ctrl-scroll, or pinch to zoom on the x axis. Shift-drag to pan.</p>
 <div id="distributions" class="row justify-content-center"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
@@ -123,13 +121,19 @@ Hover over a point to see its bin and count.</p>
 <script>
 const report = JSON.parse(document.getElementById('stats-data').textContent);
 const colors = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#777777'];
-function panel(parent, title) {
+function panel(parent, title, description) {
     const section = document.createElement('section');
     section.className = 'col-lg-5 col-md-6 mb-4';
     const heading = document.createElement('h3');
     heading.className = 'h5';
     heading.textContent = title;
     section.appendChild(heading);
+    if (description) {
+        const explanation = document.createElement('p');
+        explanation.className = 'small text-muted';
+        explanation.textContent = description;
+        section.appendChild(explanation);
+    }
     const container = document.createElement('div');
     container.className = 'chart-container';
     const canvas = document.createElement('canvas');
@@ -147,7 +151,12 @@ function emptyNote(section) {
 }
 function binLabel(series, x) {
     if (series.cap !== null && x === series.cap) return `${x}+ bp`;
-    if (series.width > 1) return `${x}–${x + series.width - 1} bp`;
+    if (series.cap !== null && x === 0) return '0 bp';
+    if (series.width > 1) {
+        const end = series.cap === null ? x + series.width - 1
+            : Math.min(x + series.width - 1, series.cap - 1);
+        return `${x}–${end} bp`;
+    }
     return series.cap !== null ? `${x} bp` : String(x);
 }
 try {
@@ -169,7 +178,7 @@ try {
         });
     });
     report.lines.forEach(series => {
-        const {section, canvas} = panel('distributions', series.title);
+        const {section, canvas} = panel('distributions', series.title, series.description);
         if (!series.points.some(point => point.y > 0)) emptyNote(section);
         const chart = new Chart(canvas, {
             type: 'line',
@@ -204,13 +213,11 @@ try {
             toggle.className = 'btn btn-outline-secondary btn-sm mt-2 ms-2';
             toggle.textContent = 'Exclude zero';
             toggle.setAttribute('aria-pressed', 'false');
-            toggle.title = 'Exclude exact zero differences; retain 1–9 bp differences in the end-length bin';
+            toggle.title = 'Exclude the separate 0 bp bin';
             toggle.addEventListener('click', () => {
                 excludeZero = !excludeZero;
-                chart.data.datasets[0].data = series.points.map(point => ({
-                    x: point.x,
-                    y: excludeZero && point.x === 0 ? point.y - series.zeroCount : point.y
-                }));
+                chart.data.datasets[0].data = excludeZero
+                    ? series.points.filter(point => point.x !== 0) : series.points;
                 toggle.textContent = excludeZero ? 'Include zero' : 'Exclude zero';
                 toggle.setAttribute('aria-pressed', String(excludeZero));
                 // Restore the full x range and recalculate y from the displayed counts.
