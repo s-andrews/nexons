@@ -720,11 +720,15 @@ def gene_matches(exons,gene,flex,endflex):
     best_end_percentile = 0
     best_endflex = None
     best_innerflex = None
+    ever_overlapped_exon = False
 
     for transcript in gene["transcripts"].values():
 
-        success, partial, endflex_observed, innerflex_observed, start_percent, end_percent = match_exons(exons, transcript["exons"], flex, endflex)
-        
+        success, partial, endflex_observed, innerflex_observed, start_percent, end_percent, overlaps_exon = match_exons(exons, transcript["exons"], flex, endflex)
+    
+        if overlaps_exon:
+            ever_overlapped_exon = True
+
         if success:
             if matched_transcript is None:
                 matched_transcript = transcript["id"]
@@ -792,13 +796,17 @@ def gene_matches(exons,gene,flex,endflex):
     if status=="partial_multi":
         status="multi"
 
-    # If we get here and we've not matched any transcripts we could still match
+    # If we get here and we've not matched any transcripts we could still matchshow
     # the gene as a whole, either from a different splicing pattern, or from
     # being immature, or contained within an intron.
+    #
+    # If it's just within an intron and the allow_intron_only flag isn't set 
+    # then we don't count this as a gene level match.
     if matched_transcript is None:
-        if gene["start"]-endflex <= exons[0][0] and gene["end"]+endflex >= exons[-1][1]:
-            # The read sits within the gene
-            status="intron"
+        if options.allow_intron_only or ever_overlapped_exon:
+            if gene["start"]-endflex <= exons[0][0] and gene["end"]+endflex >= exons[-1][1]:
+                # The read sits within the gene
+                status="intron"
 
     return (matched_transcript,status,best_endflex,best_innerflex,best_start_percentile,best_end_percentile)
 
@@ -829,6 +837,8 @@ def match_exons(exons,transcript,flex,endflex):
 
         full_match = True
         matches = True
+
+        overlaps_exon = False
 
         start_percent = None
         end_percent = None
@@ -874,6 +884,11 @@ def match_exons(exons,transcript,flex,endflex):
             if this_start > transcript[current_transcript_exon][1] or this_end < transcript[current_transcript_exon][0]:
                 start_matches = False
                 end_matches = False
+
+            else:
+                # We keep a record of whether we overlap an exons at any point
+                # so we can optionally choose to not use intron only reads
+                overlaps_exon = True
 
             # print("Start mismatch",start_mismatch,start_matches)
             # print("End mismatch",end_mismatch,end_matches)
@@ -1045,7 +1060,7 @@ def match_exons(exons,transcript,flex,endflex):
             if start_percent > 100 or start_percent < 0 or end_percent > 100 or end_percent < 0:
                 raise Exception("Start or end percent is out of range "+str(start_percent)+" - "+str(end_percent))
 
-        return (matches, not full_match, end_flex_values, inner_flex_values, start_percent, end_percent)
+        return (matches, not full_match, end_flex_values, inner_flex_values, start_percent, end_percent, overlaps_exon)
 
 
 def get_possible_genes(index, chr, start, end, direction):
@@ -1400,6 +1415,12 @@ def get_options():
         "--no-prefer-complete", action="store_true",
         help="Treat complete and incomplete matches as equally valid",
     )
+
+    parser.add_argument(
+        "--allow-intron-only", action="store_true",
+        help="Allow reads which don't overlap an exon to still count towards the gene",
+    )
+
 
     parser.add_argument(
         "--no-remove-dups", action="store_true",
