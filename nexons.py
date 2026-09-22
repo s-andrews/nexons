@@ -188,25 +188,36 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, covera
 
 def write_combined_qc_report(samples, options, outbase):
     """Render all per-sample QC counts and distributions in input order."""
+
     template = Path(__file__).parent / "templates/nexons_combined_qc_template.html"
+
     names = [Path(sample["file"]).stem for sample in samples]
+
     metrics = list(dict.fromkeys(key for sample in samples for key in sample["outcomes"]))
+
     table = '<thead><tr><th>Sample</th>' + ''.join(
         '<th>' + html.escape(key.replace('_', ' ')) + '</th>' for key in metrics) + '</tr></thead><tbody>'
+
     for name, sample in zip(names, samples):
         table += '<tr><th scope="row" title="' + html.escape(sample["file"], quote=True) + '">' + html.escape(name) + '</th>'
         table += ''.join(f'<td>{sample["outcomes"].get(key, 0):,}</td>' for key in metrics) + '</tr>'
+
     table += '</tbody>'
+
     option_rows = '<tr><td>Nexons version</td><td>' + html.escape(VERSION) + '</td></tr>'
+
     for key, value in vars(options).items():
         if key not in ("bam", "verbose", "quiet", "suppress_warnings"):
             option_rows += '<tr><td>' + html.escape(key) + '</td><td>' + html.escape(str(value)) + '</td></tr>'
+
     # Escaping < prevents sample names from terminating the JSON script element.
     payload = json.dumps({"names": names, "samples": samples}, allow_nan=False).replace("<", chr(92) + "u003c")
+
     text = template.read_text(encoding="utf8")
-    for token, value in (("%%OPTIONS%%", option_rows), ("%%METRICS%%", table),
-                         ("%%BAMFILE%%", "Combined QC"), ("%%DATA%%", payload)):
+
+    for token, value in (("%%OPTIONS%%", option_rows), ("%%METRICS%%", table),("%%BAMFILE%%", "Combined QC"), ("%%DATA%%", payload)):
         text = text.replace(token, value)
+
     Path(outbase + "_combined_qc.html").write_text(text, encoding="utf8")
 
 
@@ -568,7 +579,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
             if outsam is not None:
                 outsam.write(read)
 
-        elif not found_hit and status == "intron":
+        elif not found_hit and found_status == "intron":
             # We have only a gene level hit
             outcomes["Gene"] += 1
             if not found_gene_id in counts["gene"]:
@@ -621,6 +632,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, endflex):
                 outsam.write(read)
 
             # We can add in the flex values to the total
+            if best_endflex is None:
+                print(f"DEBUG {read} {found_gene_id}")
             for i in best_endflex:
                 end_flex_observations[i] += 1
 
@@ -755,13 +768,11 @@ def gene_matches(exons,gene,flex,endflex):
                     # If this match is partial and the original is unique
                     # then we ignore this
                     if status=="unique" and partial:
-                        print("Prev unique, this partial")
                         continue
 
                     # If this match is unique and the original is partial
                     # then replace the original match with this one
                     if status != "unique" and not partial:
-                        print("Prev not unique, this not partial")
                         status="unique"
                         matched_transcript = transcript["id"]
                         best_endflex = endflex_observed
@@ -776,14 +787,12 @@ def gene_matches(exons,gene,flex,endflex):
                     # override it with a subsequent unique but we'll convert 
                     # it to a multi at the end
                     if partial and status=="partial":
-                        print("Prev partial, this partial")
                         status="partial_multi"
                         continue
 
                     # Finally if the previous is unique and so is this then
                     # it's a multi match
                     if not partial and status=="unique":
-                        print("Prev unique this unique")
                         status="multi"
                         break
 
