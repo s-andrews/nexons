@@ -31,7 +31,7 @@ def main():
     genes_transcripts_exons = read_gtf(options.gtf, options.maxtsl)
 
     if not options.no_remove_dups:
-        lof("Removing duplicate transcripts")
+        log("Removing duplicate transcripts")
         remove_duplicate_transcripts(genes_transcripts_exons)
 
 
@@ -747,21 +747,24 @@ def gene_matches(exons,gene,flex,endflex):
                 # match and a unique match then we'll prefer the unique unless
                 # they have set --no-prefer-complete
 
-                if options.no_prefer_complete:
+                if not options.no_prefer_complete:
                     # If this match is partial and the original is unique
                     # then we ignore this
                     if status=="unique" and partial:
+                        print("Prev unique, this partial")
                         continue
 
                     # If this match is unique and the original is partial
                     # then replace the original match with this one
                     if status != "unique" and not partial:
+                        print("Prev not unique, this not partial")
                         status="unique"
                         matched_transcript = transcript["id"]
                         best_endflex = endflex_observed
                         best_innerflex = innerflex_observed
                         best_start_percentile = start_percent
                         best_end_percentile = end_percent
+                        continue
 
 
                     # If this match is partial and so was the previous one
@@ -769,12 +772,16 @@ def gene_matches(exons,gene,flex,endflex):
                     # override it with a subsequent unique but we'll convert 
                     # it to a multi at the end
                     if partial and status=="partial":
+                        print("Prev partial, this partial")
                         status="partial_multi"
+                        continue
 
                     # Finally if the previous is unique and so is this then
                     # it's a multi match
                     if not partial and status=="unique":
+                        print("Prev unique this unique")
                         status="multi"
+                        break
 
                 else:
                     status = "multi"
