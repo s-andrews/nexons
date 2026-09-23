@@ -427,6 +427,14 @@ def test_percentile_matching():
     else:
         passed("Percentile full match OK")
     
+    # Full start to end match reverse
+    answer = match_exons([[100,200],[300,400],[500,600]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if not answer[5] == 0:
+        failed("Incorrect start for full match")
+    elif not answer[6] == 100:
+        failed("Incorrect end for full match")
+    else:
+        passed("Percentile reverse full match OK")
 
     # Start to mid match
     answer = match_exons([[100,200],[300,350]],"+",[[100,200],[300,400],[500,600]],0,0,0)
@@ -437,6 +445,16 @@ def test_percentile_matching():
     else:
         passed("Percentile start mid match OK")
 
+    # Reverse mid to end match
+    answer = match_exons([[100,200],[300,350]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(50-answer[5])>1:
+        breakpoint()
+        failed("Incorrect start for reverse mid to end match")
+    elif not answer[6] == 100:
+        failed("Incorrect end for reverse mid to end match")
+    else:
+        passed("Percentile reverse mid to end match OK")
+
 
     # Mid to end match
     answer = match_exons([[350,400],[500,600]],"+",[[100,200],[300,400],[500,600]],0,0,0)
@@ -446,6 +464,15 @@ def test_percentile_matching():
         failed("Incorrect start for start mid match")
     else:
         passed("Percentile mid end match OK")
+
+    # Reverse start to mid match
+    answer = match_exons([[350,400],[500,600]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if not answer[5] == 0:
+        failed("Incorrect start for reverse start to midmatch")
+    elif abs(50-answer[6])>1:
+        failed("Incorrect end for reverse start to mid match")
+    else:
+        passed("Percentile reverse start to mid match OK")
 
 
     # Inner match
@@ -459,6 +486,17 @@ def test_percentile_matching():
     else:
         passed("Percentile Inner match OK")
 
+    # Inner reverse match
+    answer = match_exons([[350,400],[500,550]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(17-answer[5])>1:
+        failed("Incorrect start for reverse inner match")
+
+    if abs(50-answer[6])>1:
+        failed("Incorrect end for reverse inner match")
+
+    else:
+        passed("Percentile Reverse Inner match OK")
+
 
     # Single exon match
     answer = match_exons([[550,600]],"+",[[100,200],[300,400],[500,600]],0,0,0)
@@ -468,6 +506,15 @@ def test_percentile_matching():
         failed("Incorrect end for single exon match")
     else:
         passed("Percentile single exon match OK")
+
+    # Single reverse exon match
+    answer = match_exons([[550,600]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[6]-17) > 1:
+        failed("Incorrect end for reverse single exon match")
+    elif not answer[5] == 0:
+        failed("Incorrect start for reverse single exon match")
+    else:
+        passed("Percentile reverse single exon match OK")
 
 
     # Single exon match 2
@@ -479,6 +526,15 @@ def test_percentile_matching():
     else:
         passed("Percentile single exon match2 OK")
 
+    # Single reverse exon match 2
+    answer = match_exons([[100,150]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[5]-83) > 1:
+        failed("Incorrect start for reverse single exon match2")
+    elif not answer[6] == 100:
+        failed("Incorrect end for reverse single exon match2")
+    else:
+        passed("Percentile reverse single exon match2 OK")
+
 
     # Middle exon match
     answer = match_exons([[300,400]],"+",[[100,200],[300,400],[500,600]],0,0,0)
@@ -488,6 +544,15 @@ def test_percentile_matching():
         failed("Incorrect middle exon end match")
     else:
         passed("Percentile middle exon match OK")
+
+    # Middle reverse exon match
+    answer = match_exons([[300,400]],"-",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[6]-67) > 1:
+        failed("Incorrect reverse middle exon end match")
+    elif abs(answer[5]-33) > 1:
+        failed("Incorrect reverse middle exon start match")
+    else:
+        passed("Percentile reverse middle exon match OK")
 
 
     # Single exon transcript
@@ -499,6 +564,15 @@ def test_percentile_matching():
     else:
         passed("Percentile single exon transcript OK")
     
+
+    # Single reverse exon transcript
+    answer = match_exons([[100,150]],"-",[[50,200]],0,0,0)
+    if abs(answer[6]-67) > 1:
+        failed("Incorrect end for reverse single exon transcript")
+    elif abs(answer[5]-33) > 1:
+        failed("Incorrect start for reverse single exon transcript")
+    else:
+        passed("Percentile reverse single exon transcript OK")
 
 if __name__ == "__main__":
     main()
