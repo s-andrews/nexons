@@ -94,13 +94,38 @@ def test_gene_matching():
         passed("Intron match OK")
 
     gene = {'name': 'TEST', 'id': 'ENSG00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'transcripts': {'ENST00000000001': {'name': 'TEST-101', 'id': 'ENST00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'exons': [[10,100], [200,300], [600,800]]}, 'ENST00000000002': {'name': 'TEST-102', 'id': 'ENST00000000002', 'chrom': '1', 'start': 10, 'end': 300, 'strand': '+', 'exons': [[10, 100], [200,300]]}}}
+    
     # Subset match
+    # The behaviour here changes depending on the options
+    # set.  With no_prefer_complete set then the subset
+    # match should succeed. With it turned off then it should
+    # fail
+
+    nexons.options = SimpleNamespace(
+        no_prefer_complete=True,
+        allow_intron_only = False,
+        verbose = False,
+        strict_enforce_flex = False
+    )
+
     answer = gene_matches([[10,100],[200,300]],gene,0,0,0)
     if answer[1] != "multi":
-        failed("Subset match not reported as multi")
+        failed("Subset match noprefer not reported as multi")
     else:
-        passed("Subset match OK")
+        passed("Subset match noprefer OK")
 
+    nexons.options = SimpleNamespace(
+        no_prefer_complete=False,
+        allow_intron_only = False,
+        verbose = False,
+        strict_enforce_flex = False
+    )
+
+    answer = gene_matches([[10,100],[200,300]],gene,0,0,0)
+    if answer[1] == "multi":
+        failed("Subset match prefer reported as multi")
+    else:
+        passed("Subset match prefer OK")
 
 
 
@@ -159,7 +184,7 @@ def test_exon_matching():
 
 
     # Match with end flex
-    answer = match_exons([[5,20],[30,40],[50,65]],"+",[[10,20],[30,40],[50,60]],0,5,5)
+    answer = match_exons([[5,20],[30,40],[50,70]],"+",[[10,20],[30,40],[50,60]],0,5,10)
     if not answer[0]:
         failed("End flex reported as not matching")
 
@@ -169,7 +194,7 @@ def test_exon_matching():
     elif answer[2] != -5:
         failed("Incorrect startflex value for start flex")
 
-    elif answer[3] != 5:
+    elif answer[3] != 10:
         failed("Incorrect endflex value for end flex")
 
 
@@ -197,7 +222,8 @@ def test_exon_matching():
         passed("Too much start flex OK")
 
     # Reverse start flex
-    answer = match_exons([[5,20],[30,40],[50,65]],"-",[[10,20],[30,40],[50,75]],0,5,10)
+    answer = match_exons([[5,20],[30,40],[50,75]],"-",[[10,20],[30,40],[50,65]],0,10,5)
+
     if not answer[0]:
         failed("Reverse End flex reported as not matching")
 
@@ -208,6 +234,7 @@ def test_exon_matching():
         failed("Incorrect reverse startflex value for start flex")
 
     elif answer[3] != 5:
+        breakpoint()
         failed("Incorrect reverse endflex value for end flex")
 
 
@@ -227,8 +254,8 @@ def test_exon_matching():
     elif not answer[1]:
         failed("Partial match reported as perfect")
 
-    elif answer[2] != 0:
-        failed("Nonzero startflex for partial match")
+    elif answer[2] is not None:
+        failed("Reported startflex for partial match")
 
     elif answer[3] != 0:
         failed("Nonzero endflex for partial match")
@@ -283,7 +310,7 @@ def test_exon_matching():
     elif answer[3] is not None:
         failed("Endflex reported for intron match")
 
-    elif answer[4] is not None:
+    elif len(answer[4]) != 0:
         failed("Innerflex reported for intron match")
 
     else:
@@ -301,7 +328,7 @@ def test_exon_matching():
     elif answer[3] is not None:
         failed("Endflex reported for exon to intron match")
 
-    elif answer[4] is not None:
+    elif len(answer[4]) != 0:
         failed("Innerflex reported for exon to intron match")
 
     else:
