@@ -762,9 +762,12 @@ def gene_matches(exons,gene,flex,endflex):
             else:
                 # What we do here depends on an option. If we have a partial 
                 # match and a unique match then we'll prefer the unique unless
-                # they have set --no-prefer-complete
+                # they have set --no-prefer-complete.  We don't need to try this
+                # if this is a unique match and there's already a unique match.
+                # There's a separate rescue path for those if the current match 
+                # uses less inner flex.
 
-                if not options.no_prefer_complete:
+                if not options.no_prefer_complete and not (not partial and status=="unique"):
                     # If this match is partial and the original is unique
                     # then we ignore this
                     if status=="unique" and partial:
@@ -790,14 +793,42 @@ def gene_matches(exons,gene,flex,endflex):
                         status="partial_multi"
                         continue
 
-                    # Finally if the previous is unique and so is this then
-                    # it's a multi match
-                    if not partial and status=="unique":
-                        status="multi"
-                        break
-
                 else:
-                    status = "multi"
+                    # This is a unique match and we've got one already
+                    # we may still be able to rescue this if we have lower
+                    # flex on the current match than on the previous one
+                    if not options.strict_enforce_flex:
+                        if sum(innerflex_observed) < sum(best_innerflex):
+                            # This is a better match than the one we're
+                            # holding so we'll keep this instead.  It doesn't
+                            # matter if we were previously a multi match
+                            # because we're better than all of them.
+                            status="unique"
+                            matched_transcript = transcript["id"]
+                            best_endflex = endflex_observed
+                            best_innerflex = innerflex_observed
+                            best_start_percentile = start_percent
+                            best_end_percentile = end_percent
+                        elif sum(innerflex_observed) > sum(best_innerflex):
+                            # Although this is a unique match, it's worse than
+                            # the one we're storing so we'll pretend like it
+                            # never happened.
+                            continue
+
+                        elif sum(innerflex_observed) == sum(best_innerflex):
+                            # These are equally good so it's now a multi match
+                            # we need to keep looking though as later matches
+                            # might be better than this
+                            status="multi"
+
+                    
+                    else:
+                        # We only get here if we're not rescuing with smaller
+                        # flex.  Once we've set multi from this path there's 
+                        # no coming back so we can stop looking at other 
+                        # transcripts
+                        status = "multi"
+                        break
 
     # Before we go on - if we've ended up with a status of partial_multi
     # then we need to turn it into a true multi status since there's no
@@ -1428,6 +1459,11 @@ def get_options():
     parser.add_argument(
         "--allow-intron-only", action="store_true",
         help="Allow reads which don't overlap an exon to still count towards the gene",
+    )
+
+    parser.add_argument(
+        "--strict-enforce-flex", action="store_true",
+        help="Don't allow complete matches with smaller flex to beat complete with larger flex",
     )
 
 
