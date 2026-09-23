@@ -638,10 +638,12 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
                 read.set_tag("nR","gene",value_type="Z")
                 outsam.write(read)
 
-            # We can add in the flex values to the total            
-            end_flex_observations[best_endflex] += 1
+            # We can add in the flex values to the total  
+            if best_endflex is not None:          
+                end_flex_observations[best_endflex] += 1
 
-            start_flex_observations[best_startflex] += 1
+            if best_startflex is not None:
+                start_flex_observations[best_startflex] += 1
 
             for i in best_innerflex:
                 inner_flex_observations[i] += 1
