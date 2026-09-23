@@ -277,11 +277,12 @@
         </div>
 
         <div class="row">
-            <div class="col-md-2">
-            </div>
 
             <div class="col-md-4">
                 <h2>Inner Exon Flex</h2>
+            </div>
+            <div class="col-md-4">
+                <h2>Transcript Start Flex</h2>
             </div>
             <div class="col-md-4">
                 <h2>Transcript End Flex</h2>
@@ -289,12 +290,15 @@
         </div>
 
         <div class="row">
-            <div class="col-md-2">
-            </div>
 
             <div class="col-md-4">
                 <div style="width: 100%;" class="pt-1">
                     <canvas id="innerflexchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="startflexchart" style="width: 100%;"></canvas>
                 </div>
             </div>
             <div class="col-md-4">
@@ -530,6 +534,55 @@
             }
         });
 
+        const startflexdata = {
+            labels: %%StartFlexLabels%%,
+            datasets: [{
+                label: 'Transcript Start Mismatch Distance',
+                data: %%StartFlexData%%,
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("startflexchart", {
+            type: "line",
+            data: startflexdata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            text: "Distance from annotated junction (bp)",
+                            display: true
+                        },
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                value = Number(this.getLabelForValue(value))
+                                if (value % 50 === 0) {
+                                    return value
+                                }
+                                return null
+                            }
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Junction count",
+                            display: true
+                        }
+                    }
+                }
+            }
+        });
+
         const endflexdata = {
             labels: %%EndFlexLabels%%,
             datasets: [{
@@ -561,7 +614,7 @@
                         },
                         ticks: {
                             callback: function(value, index, ticks) {
-                                value = value - %%endflex%%
+                                value = Number(this.getLabelForValue(value))
                                 if (value % 50 === 0) {
                                     return value
                                 }

@@ -61,14 +61,15 @@ def main():
             file_results = map(process_file_job, enumerate(options.bam))
 
         for bam_file, result in zip(options.bam, file_results):
-            read_lengths,outcomes,quantitations,endflex_observations,innerflex_observations,coverage = result
+            read_lengths,outcomes,quantitations,startflex_observations,endflex_observations,innerflex_observations,coverage = result
             results.append(quantitations)
             qc_samples.append({"file": bam_file, "outcomes": outcomes,
-                               "read_lengths": read_lengths, "end_flex": endflex_observations,
+                               "read_lengths": read_lengths, "start_flex": startflex_observations,
+                               "end_flex": endflex_observations,
                                "inner_flex": innerflex_observations, "coverage": coverage})
-            write_stats_file(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options.outbase)
+            write_stats_file(bam_file,outcomes, read_lengths,startflex_observations,endflex_observations, innerflex_observations, coverage, options.outbase)
             if options.allqc:
-                write_qc_report(bam_file,outcomes, read_lengths,endflex_observations, innerflex_observations, coverage, options, options.outbase)
+                write_qc_report(bam_file,outcomes, read_lengths,startflex_observations,endflex_observations, innerflex_observations, coverage, options, options.outbase)
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
     write_combined_qc_report(qc_samples, options, options.outbase)
@@ -88,12 +89,13 @@ def process_file_job(job):
                             options.direction, options.flex, options.startflex, options.endflex)
 
 
-def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, outbase):
+def write_stats_file(bam_file, outcomes, read_lengths, startflex, endflex, innerflex, coverage, outbase):
     outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_nexons_stats.txt"
     output = {
         "file": bam_file,
         "outcomes":outcomes,
         "read_lengths": read_lengths,
+        "start_flex": startflex,
         "end_flex": endflex,
         "inner_flex": innerflex,
         "coverage": coverage
@@ -104,7 +106,7 @@ def write_stats_file(bam_file, outcomes, read_lengths, endflex, innerflex, cover
 
 
 
-def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, coverage, options, outbase):
+def write_qc_report(bam_file, outcomes, read_lengths, startflex, endflex, innerflex, coverage, options, outbase):
     outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -156,28 +158,10 @@ def write_qc_report(bam_file, outcomes, read_lengths, endflex, innerflex, covera
     template_text = template_text.replace("%%TranscriptCoverageLabels%%",str(transcript_coverage_labels))
     template_text = template_text.replace("%%TranscriptCoverageData%%",str(coverage))
 
-    # We need to assemble the inner and end flexibility data too
-    innerflexlabels = []
-    innerflexdata = []
-
-    for label,value in innerflex.items():
-        innerflexlabels.append(label)
-        innerflexdata.append(value)
-    
-    template_text = template_text.replace("%%InnerFlexLabels%%",str(innerflexlabels))
-    template_text = template_text.replace("%%InnerFlexData%%",str(innerflexdata))
-
-    endflexlabels = []
-    endflexdata = []
-
-    for label,value in endflex.items():
-        endflexlabels.append(label)
-        endflexdata.append(value)
-    
-    template_text = template_text.replace("%%EndFlexLabels%%",str(endflexlabels))
-    template_text = template_text.replace("%%EndFlexData%%",str(endflexdata))
-    # We also need to add the endflex value
-    template_text = template_text.replace("%%endflex%%",str(endflexlabels[-1]))
+    # Each flexibility distribution has its own range of observed distances.
+    for name, observations in (("Inner", innerflex), ("Start", startflex), ("End", endflex)):
+        template_text = template_text.replace(f"%%{name}FlexLabels%%", str(list(observations)))
+        template_text = template_text.replace(f"%%{name}FlexData%%", str(list(observations.values())))
 
 
 
@@ -710,7 +694,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
             filtered_read_lengths.append(bin)
 
 
-    return (filtered_read_lengths,outcomes,counts,end_flex_observations, inner_flex_observations, read_coverage_percentiles)
+    return (filtered_read_lengths,outcomes,counts,start_flex_observations,end_flex_observations, inner_flex_observations, read_coverage_percentiles)
 
 
 def gene_matches(exons,gene,flex,startflex,endflex):
