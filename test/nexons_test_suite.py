@@ -11,11 +11,18 @@
 
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 sys.path.append(str(Path(__file__).parent.parent))
 
+import nexons
 from nexons import get_possible_genes, match_exons, gene_matches,read_gtf, build_index
 
+nexons.options = SimpleNamespace(
+    no_prefer_complete=False,
+    allow_intron_only = False,
+    verbose = False
+)
 
 def main():
 
@@ -44,7 +51,7 @@ def test_gene_matching():
     gene = {'name': 'TEST', 'id': 'ENSG00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'transcripts': {'ENST00000000001': {'name': 'TEST-101', 'id': 'ENST00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'exons': [[10,100], [600,800]]}, 'ENST00000000002': {'name': 'TEST-102', 'id': 'ENST00000000002', 'chrom': '1', 'start': 10, 'end': 500, 'strand': '+', 'exons': [[10, 100], [200,500]]}}}
 
     # Unique hit
-    answer = gene_matches([[10,100],[200,500]],gene,0,0)
+    answer = gene_matches([[10,100],[200,500]],gene,0,0,0)
     if not answer[0] is not None:
         failed("Unique hit not reporting transcript")
     elif not answer[0] == "ENST00000000002":
@@ -56,7 +63,7 @@ def test_gene_matching():
 
 
     # Partial hit
-    answer = gene_matches([[10,100],[200,300]],gene,0,0)
+    answer = gene_matches([[10,100],[200,300]],gene,0,0,0)
     if not answer[0] is not None:
         failed("Partial hit not reporting transcript")
     elif not answer[0] == "ENST00000000002":
@@ -68,7 +75,7 @@ def test_gene_matching():
 
 
     # Multi hit - should match multiple transcripts
-    answer = gene_matches([[10,100]],gene,0,0)
+    answer = gene_matches([[10,100]],gene,0,0,0)
     if not answer[0] is not None:
         failed("Multi hit not reporting transcript")
     elif answer[1] != "multi":
@@ -78,7 +85,7 @@ def test_gene_matching():
 
 
     # Intron match
-    answer = gene_matches([[500,600]],gene,0,0)
+    answer = gene_matches([[500,600]],gene,0,0,0)
     if answer[0] is not None:
         failed("Intron matching incorrectly reporting transcript")
     elif answer[1] != "intron":
@@ -88,7 +95,7 @@ def test_gene_matching():
 
     gene = {'name': 'TEST', 'id': 'ENSG00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'transcripts': {'ENST00000000001': {'name': 'TEST-101', 'id': 'ENST00000000001', 'chrom': '1', 'start': 10, 'end': 800, 'strand': '+', 'exons': [[10,100], [200,300], [600,800]]}, 'ENST00000000002': {'name': 'TEST-102', 'id': 'ENST00000000002', 'chrom': '1', 'start': 10, 'end': 300, 'strand': '+', 'exons': [[10, 100], [200,300]]}}}
     # Subset match
-    answer = gene_matches([[10,100],[200,300]],gene,0,0)
+    answer = gene_matches([[10,100],[200,300]],gene,0,0,0)
     if answer[1] != "multi":
         failed("Subset match not reported as multi")
     else:
@@ -102,34 +109,40 @@ def test_exon_matching():
     # match_exons( exons, transcript, flex, endflex)
 
     # Perfect match
-    answer = match_exons([[10,20],[30,40],[50,60]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[10,20],[30,40],[50,60]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if not answer[0]:
         failed("Perfect match reported as not matching")
 
     elif answer[1]:
         failed("Perfect match reported as partial")
 
-    elif any([x!=0 for x in answer[2]]):
+    elif answer[2] != 0:
+        failed("Nonzero startflex for perfect match")
+
+    elif answer[3] != 0:
         failed("Nonzero endflex for perfect match")
 
-    elif any([x!=0 for x in answer[3]]):
+    elif any([x!=0 for x in answer[4]]):
         failed("Nonzero innerflex for perfect match")
 
     else:
         passed("Perfect match OK")
 
     # Match with internal flex
-    answer = match_exons([[10,25],[30,40],[45,60]],[[10,20],[30,40],[50,60]],5,0)
+    answer = match_exons([[10,25],[30,40],[45,60]],"+",[[10,20],[30,40],[50,60]],5,0,0)
     if not answer[0]:
         failed("Internal flex reported as not matching")
 
     elif answer[1]:
         failed("Perfect internal flex reported as partial")
 
-    elif any([x!=0 for x in answer[2]]):
+    elif answer[2] != 0:
+        failed("Nonzero startflex for internal flex")
+
+    elif answer[3] != 0:
         failed("Nonzero endflex for internal flex")
 
-    elif answer[3] != [5,0,0,-5]:
+    elif answer[4] != [5,0,0,-5]:
         failed("Incorreect flex values for internal flex")
 
     else:
@@ -137,7 +150,7 @@ def test_exon_matching():
 
 
     # Match with too much internal flex
-    answer = match_exons([[10,25],[30,40],[45,60]],[[10,20],[30,40],[50,60]],4,0)
+    answer = match_exons([[10,25],[30,40],[45,60]],"+",[[10,20],[30,40],[50,60]],4,0,0)
     if answer[0]:
         failed("Too much internal flex reported as matching")
 
@@ -146,17 +159,21 @@ def test_exon_matching():
 
 
     # Match with end flex
-    answer = match_exons([[5,20],[30,40],[50,65]],[[10,20],[30,40],[50,60]],0,5)
+    answer = match_exons([[5,20],[30,40],[50,65]],"+",[[10,20],[30,40],[50,60]],0,5,5)
     if not answer[0]:
         failed("End flex reported as not matching")
 
     elif answer[1]:
         failed("Perfect end flex reported as partial")
 
-    elif answer[2] != [-5,5]:
-        failed("Incorreect endflex values for end flex")
+    elif answer[2] != -5:
+        failed("Incorrect startflex value for start flex")
 
-    elif any([x!=0 for x in answer[3]]):
+    elif answer[3] != 5:
+        failed("Incorrect endflex value for end flex")
+
+
+    elif any([x!=0 for x in answer[4]]):
         failed("Nonzero innerflex for end flex")
 
     else:
@@ -164,26 +181,60 @@ def test_exon_matching():
 
 
     # Match with too much end flex
-    answer = match_exons([[5,20],[30,40],[50,65]],[[10,20],[30,40],[50,60]],0,4)
+    answer = match_exons([[10,20],[30,40],[50,65]],"+",[[10,20],[30,40],[50,60]],0,0,4)
     if answer[0]:
         failed("Too much end flex reported as matching")
 
     else:
         passed("Too much end flex OK")
 
+    # Match with too much start flex
+    answer = match_exons([[10,20],[30,40],[50,65]],"+",[[15,20],[30,40],[50,65]],0,4,0)
+    if answer[0]:
+        failed("Too much start flex reported as matching")
+
+    else:
+        passed("Too much start flex OK")
+
+    # Reverse start flex
+    answer = match_exons([[5,20],[30,40],[50,65]],"-",[[10,20],[30,40],[50,75]],0,5,10)
+    if not answer[0]:
+        failed("Reverse End flex reported as not matching")
+
+    elif answer[1]:
+        failed("Reverse Perfect end flex reported as partial")
+
+    elif answer[2] != -10:
+        failed("Incorrect reverse startflex value for start flex")
+
+    elif answer[3] != 5:
+        failed("Incorrect reverse endflex value for end flex")
+
+
+    elif any([x!=0 for x in answer[4]]):
+        failed("Nonzero innerflex for reverse end flex")
+
+    else:
+        passed("End flex OK")
+
+
 
     # Partial match
-    answer = match_exons([[35,40],[50,60]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[35,40],[50,60]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if not answer[0]:
         failed("Partial match reported as not matching")
 
     elif not answer[1]:
         failed("Partial match reported as perfect")
 
-    elif any([x!=0 for x in answer[2]]):
+    elif answer[2] != 0:
+        failed("Nonzero startflex for partial match")
+
+    elif answer[3] != 0:
         failed("Nonzero endflex for partial match")
 
-    elif any([x!=0 for x in answer[3]]):
+
+    elif any([x!=0 for x in answer[4]]):
         failed("Nonzero innerflex for partial match")
 
     else:
@@ -191,7 +242,7 @@ def test_exon_matching():
 
 
     # Internal exon match
-    answer = match_exons([[32,38]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[32,38]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if not answer[0]:
         failed("Internal exon match reported as not matching")
 
@@ -199,16 +250,19 @@ def test_exon_matching():
         failed("Internal exon match reported as perfect")
 
     elif answer[2]:
-        failed("Endflex reported for internal exon match")
+        failed("Startflex reported for internal exon match")
 
     elif answer[3]:
+        failed("Endflex reported for internal exon match")
+
+    elif answer[4]:
         failed("Innerflex reported for internal exon match")
 
     else:
         passed("Internal exon match OK")
 
     # Internal imperfect match - we may start the read slightly before the exon
-    answer = match_exons([[28,35]],[[10,20],[30,40],[50,60]],3,0)
+    answer = match_exons([[28,35]],"+",[[10,20],[30,40],[50,60]],3,3,0)
     if not answer[0]:
         failed("Internal imperfect not reported as matching")
     elif not answer[1]:
@@ -219,14 +273,17 @@ def test_exon_matching():
 
 
     # Intron match
-    answer = match_exons([[25,28]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[25,28]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if answer[0]:
         failed("Intron match reported as properly matching")
 
-    elif answer[2]:
+    elif answer[2] is not None:
+        failed("Startflex reported for intron match")
+
+    elif answer[3] is not None:
         failed("Endflex reported for intron match")
 
-    elif answer[3]:
+    elif answer[4] is not None:
         failed("Innerflex reported for intron match")
 
     else:
@@ -234,14 +291,17 @@ def test_exon_matching():
 
 
     # Exon to intron match
-    answer = match_exons([[35,45]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[35,45]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if answer[0]:
         failed("Exon to Intron match reported as properly matching")
 
-    elif answer[2]:
+    elif answer[2] is not None:
+        failed("Startflex reported for exon to intron match")
+
+    elif answer[3] is not None:
         failed("Endflex reported for exon to intron match")
 
-    elif answer[3]:
+    elif answer[4] is not None:
         failed("Innerflex reported for exon to intron match")
 
     else:
@@ -249,7 +309,7 @@ def test_exon_matching():
 
 
     # Mismatch
-    answer = match_exons([[100,150]],[[10,20],[30,40],[50,60]],0,0)
+    answer = match_exons([[100,150]],"+",[[10,20],[30,40],[50,60]],0,0,0)
     if answer[0]:
         failed("Mismatch reported as matching")
         
@@ -258,7 +318,7 @@ def test_exon_matching():
 
 
     # Perfect match to later exon only
-    answer = match_exons([(30,40)],[[10,20], [30,40]],0,0)
+    answer = match_exons([(30,40)],"+",[[10,20], [30,40]],0,0,0)
     if not answer[1]:
         failed("Partial later perfect match reported as complete")
     else:
@@ -268,13 +328,13 @@ def test_feature_retrieval():
     # test.gtf is human GRCh38v113 chr3 between 63723373-64479723
 
     # TSL Filtering
-    all_genes_tsl1 = read_gtf(Path(__file__).parent/"test.gtf",1)
+    all_genes_tsl1 = read_gtf(str(Path(__file__).parent/"test.gtf"),1)
     if not len(all_genes_tsl1["ENSG00000163635"]["transcripts"].keys()) == 8:
         failed("ENSG00000163635 at TSL1 didn't have 8 transcripts")
     else:
         passed("TSL1 Filtering OK")
 
-    all_genes_tsl5 = read_gtf(Path(__file__).parent/"test.gtf",5)    
+    all_genes_tsl5 = read_gtf(str(Path(__file__).parent/"test.gtf"),5)    
     if not len(all_genes_tsl5["ENSG00000163635"]["transcripts"].keys()) == 13:
         failed("ENSG00000163635 at TSL5 didn't have 13 transcripts")
     else:
@@ -332,41 +392,41 @@ def test_feature_retrieval():
 
 def test_percentile_matching():
     # Full start to end match
-    answer = match_exons([[100,200],[300,400],[500,600]],[[100,200],[300,400],[500,600]],0,0)
-    if not answer[4] == 0:
+    answer = match_exons([[100,200],[300,400],[500,600]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if not answer[5] == 0:
         failed("Incorrect start for full match")
-    elif not answer[5] == 100:
+    elif not answer[6] == 100:
         failed("Incorrect end for full match")
     else:
         passed("Percentile full match OK")
     
 
     # Start to mid match
-    answer = match_exons([[100,200],[300,350]],[[100,200],[300,400],[500,600]],0,0)
-    if not answer[4] == 0:
+    answer = match_exons([[100,200],[300,350]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if not answer[5] == 0:
         failed("Incorrect start for start mid match")
-    elif abs(50-answer[5])>1:
+    elif abs(50-answer[6])>1:
         failed("Incorrect end for start mid match")
     else:
         passed("Percentile start mid match OK")
 
 
     # Mid to end match
-    answer = match_exons([[350,400],[500,600]],[[100,200],[300,400],[500,600]],0,0)
-    if not answer[5] == 100:
+    answer = match_exons([[350,400],[500,600]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if not answer[6] == 100:
         failed("Incorrect end for mid end match")
-    elif abs(50-answer[4])>1:
+    elif abs(50-answer[5])>1:
         failed("Incorrect start for start mid match")
     else:
         passed("Percentile mid end match OK")
 
 
     # Inner match
-    answer = match_exons([[350,400],[500,550]],[[100,200],[300,400],[500,600]],0,0)
-    if abs(50-answer[4])>1:
+    answer = match_exons([[350,400],[500,550]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(50-answer[5])>1:
         failed("Incorrect start for inner match")
 
-    if abs(83-answer[5])>1:
+    if abs(83-answer[6])>1:
         failed("Incorrect end for inner match")
 
     else:
@@ -374,40 +434,40 @@ def test_percentile_matching():
 
 
     # Single exon match
-    answer = match_exons([[550,600]],[[100,200],[300,400],[500,600]],0,0)
-    if abs(answer[4]-83) > 1:
+    answer = match_exons([[550,600]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[5]-83) > 1:
         failed("Incorrect start single exon match")
-    elif not answer[5] == 100:
+    elif not answer[6] == 100:
         failed("Incorrect end for single exon match")
     else:
         passed("Percentile single exon match OK")
 
 
     # Single exon match 2
-    answer = match_exons([[100,150]],[[100,200],[300,400],[500,600]],0,0)
-    if abs(answer[5]-17) > 1:
+    answer = match_exons([[100,150]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[6]-17) > 1:
         failed("Incorrect end single exon match2")
-    elif not answer[4] == 0:
+    elif not answer[5] == 0:
         failed("Incorrect start for single exon match2")
     else:
         passed("Percentile single exon match2 OK")
 
 
     # Middle exon match
-    answer = match_exons([[300,400]],[[100,200],[300,400],[500,600]],0,0)
-    if abs(answer[4]-33) > 1:
+    answer = match_exons([[300,400]],"+",[[100,200],[300,400],[500,600]],0,0,0)
+    if abs(answer[5]-33) > 1:
         failed("Incorrect middle exon start match")
-    elif abs(answer[5]-67) > 1:
+    elif abs(answer[6]-67) > 1:
         failed("Incorrect middle exon end match")
     else:
         passed("Percentile middle exon match OK")
 
 
     # Single exon transcript
-    answer = match_exons([[100,150]],[[50,200]],0,0)
-    if abs(answer[4]-33) > 1:
+    answer = match_exons([[100,150]],"+",[[50,200]],0,0,0)
+    if abs(answer[5]-33) > 1:
         failed("Incorrect start for single exon transcript")
-    elif abs(answer[5]-67) > 1:
+    elif abs(answer[6]-67) > 1:
         failed("Incorrect end for single exon transcript")
     else:
         passed("Percentile single exon transcript OK")
