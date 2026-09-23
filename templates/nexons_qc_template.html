@@ -21,6 +21,24 @@
             margin-left: auto;
             margin-right: auto;
         }
+        .flex-section {
+            width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .flex-section .sectionhead {
+            width: 100%;
+        }
+        .flex-section .row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+        .flex-section .row > * {
+            min-width: 0;
+        }
+        .flex-section canvas {
+            max-width: 100%;
+        }
         #options td{
             font-family: monospace;
             text-align: left;
@@ -270,6 +288,7 @@
         </div>
 
 
+<div class="flex-section">
         <div class="row text-center">
             <div class="col-md-12 sectionhead">
                 <h2>Exon Match Flexibility</h2>
@@ -307,6 +326,8 @@
                 </div>
             </div>
         </div>
+
+</div>
 
 
 
