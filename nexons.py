@@ -165,6 +165,8 @@ def write_qc_report(bam_file, outcomes, read_lengths, startflex, endflex, innerf
 
 
 
+    template_text = template_text.replace("%%FLEX_CONTROLS%%",
+        template.with_name("nexons_flex_controls.js").read_text(encoding="utf8"))
     with open(outfile,"wt",encoding="utf8") as out:
         out.write(template_text)
 
@@ -202,6 +204,8 @@ def write_combined_qc_report(samples, options, outbase):
     for token, value in (("%%OPTIONS%%", option_rows), ("%%METRICS%%", table),("%%BAMFILE%%", "Combined QC"), ("%%DATA%%", payload)):
         text = text.replace(token, value)
 
+    text = text.replace("%%FLEX_CONTROLS%%",
+        template.with_name("nexons_flex_controls.js").read_text(encoding="utf8"))
     Path(outbase + "_combined_qc.html").write_text(text, encoding="utf8")
 
 

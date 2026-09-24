@@ -515,11 +515,15 @@
             }
         });
 
+        function flexPoints(labels, counts) {
+            return labels.map((x, i) => ({x, y: counts[i]})).sort((a, b) => a.x - b.x);
+        }
+
         const innerflexdata = {
             labels: %%InnerFlexLabels%%,
             datasets: [{
                 label: 'Inner Exon Mismatch Distance',
-                data: %%InnerFlexData%%,
+                data: flexPoints(%%InnerFlexLabels%%, %%InnerFlexData%%),
                 fill: false,
                 tension: 0
             }]
@@ -540,6 +544,7 @@
                 },
                 scales: {
                     x: {
+                        type: 'linear',
                         title: {
                             text: "Distance from annotated junction (bp)",
                             display: true
@@ -559,7 +564,7 @@
             labels: %%StartFlexLabels%%,
             datasets: [{
                 label: 'Transcript Start Mismatch Distance',
-                data: %%StartFlexData%%,
+                data: flexPoints(%%StartFlexLabels%%, %%StartFlexData%%),
                 fill: false,
                 tension: 0
             }]
@@ -580,18 +585,10 @@
                 },
                 scales: {
                     x: {
+                        type: 'linear',
                         title: {
                             text: "Distance from annotated junction (bp)",
                             display: true
-                        },
-                        ticks: {
-                            callback: function(value, index, ticks) {
-                                value = Number(this.getLabelForValue(value))
-                                if (value % 50 === 0) {
-                                    return value
-                                }
-                                return null
-                            }
                         }
                     },
                     y: {
@@ -608,7 +605,7 @@
             labels: %%EndFlexLabels%%,
             datasets: [{
                 label: 'Transcript End Mismatch Distance',
-                data: %%EndFlexData%%,
+                data: flexPoints(%%EndFlexLabels%%, %%EndFlexData%%),
                 fill: false,
                 tension: 0
             }]
@@ -629,18 +626,10 @@
                 },
                 scales: {
                     x: {
+                        type: 'linear',
                         title: {
                             text: "Distance from annotated junction (bp)",
                             display: true
-                        },
-                        ticks: {
-                            callback: function(value, index, ticks) {
-                                value = Number(this.getLabelForValue(value))
-                                if (value % 50 === 0) {
-                                    return value
-                                }
-                                return null
-                            }
                         }
                     },
                     y: {
@@ -693,5 +682,6 @@
         });
 
 
+%%FLEX_CONTROLS%%
 </script>
 </body>
