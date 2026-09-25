@@ -21,6 +21,24 @@
             margin-left: auto;
             margin-right: auto;
         }
+        .flex-section {
+            width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .flex-section .sectionhead {
+            width: 100%;
+        }
+        .flex-section .row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+        .flex-section .row > * {
+            min-width: 0;
+        }
+        .flex-section canvas {
+            max-width: 100%;
+        }
         #options td{
             font-family: monospace;
             text-align: left;
@@ -137,7 +155,10 @@
 
 <div class="sectionhead"><h2>Alignment Directionality</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="my-2"><label for="strandchart-mode">Display: </label> <select id="strandchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="strandchart"></canvas></div></div></div>
 <div class="sectionhead"><h2>Read Lengths and Coverage</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="readlengthchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="transcriptcoveragechart"></canvas></div></div></div>
-<div class="sectionhead"><h2>Exon Match Flexibility</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="innerflexchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="endflexchart"></canvas></div></div></div>
+<div class="flex-section">
+<div class="sectionhead"><h2>Exon Match Flexibility</h2></div><div class="row justify-content-center"><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="innerflexchart"></canvas></div></div><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="startflexchart"></canvas></div></div><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="endflexchart"></canvas></div></div></div>
+</div>
+
 <p class="mt-3">Read lengths use each sample's reported bins, including its collapsed high-length tail.
 Legends can be clicked to hide or show samples or categories.</p>
 </div>
@@ -223,7 +244,9 @@ lines('readlengthchart', 'Read Lengths', 'Length of read (100 bp bins)', 'Read c
 lines('transcriptcoveragechart', 'Transcript Coverage', "Percentile through transcript (5′ to 3′)", 'Read count',
       s => s.coverage.map((y,x) => ({x,y})));
 lines('innerflexchart', 'Inner Exon Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.inner_flex));
+lines('startflexchart', 'Transcript Start Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.start_flex));
 lines('endflexchart', 'Transcript End Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.end_flex));
+%%FLEX_CONTROLS%%
 </script>
 </body>
 </html>

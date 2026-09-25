@@ -21,6 +21,24 @@
             margin-left: auto;
             margin-right: auto;
         }
+        .flex-section {
+            width: 90%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .flex-section .sectionhead {
+            width: 100%;
+        }
+        .flex-section .row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+        .flex-section .row > * {
+            min-width: 0;
+        }
+        .flex-section canvas {
+            max-width: 100%;
+        }
         #options td{
             font-family: monospace;
             text-align: left;
@@ -270,6 +288,7 @@
         </div>
 
 
+<div class="flex-section">
         <div class="row text-center">
             <div class="col-md-12 sectionhead">
                 <h2>Exon Match Flexibility</h2>
@@ -277,11 +296,12 @@
         </div>
 
         <div class="row">
-            <div class="col-md-2">
-            </div>
 
             <div class="col-md-4">
                 <h2>Inner Exon Flex</h2>
+            </div>
+            <div class="col-md-4">
+                <h2>Transcript Start Flex</h2>
             </div>
             <div class="col-md-4">
                 <h2>Transcript End Flex</h2>
@@ -289,8 +309,6 @@
         </div>
 
         <div class="row">
-            <div class="col-md-2">
-            </div>
 
             <div class="col-md-4">
                 <div style="width: 100%;" class="pt-1">
@@ -299,10 +317,17 @@
             </div>
             <div class="col-md-4">
                 <div style="width: 100%;" class="pt-1">
+                    <canvas id="startflexchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div style="width: 100%;" class="pt-1">
                     <canvas id="endflexchart" style="width: 100%;"></canvas>
                 </div>
             </div>
         </div>
+
+</div>
 
 
 
@@ -490,11 +515,15 @@
             }
         });
 
+        function flexPoints(labels, counts) {
+            return labels.map((x, i) => ({x, y: counts[i]})).sort((a, b) => a.x - b.x);
+        }
+
         const innerflexdata = {
             labels: %%InnerFlexLabels%%,
             datasets: [{
                 label: 'Inner Exon Mismatch Distance',
-                data: %%InnerFlexData%%,
+                data: flexPoints(%%InnerFlexLabels%%, %%InnerFlexData%%),
                 fill: false,
                 tension: 0
             }]
@@ -515,6 +544,48 @@
                 },
                 scales: {
                     x: {
+                        type: 'linear',
+                        title: {
+                            text: "Distance from annotated junction (bp)",
+                            display: true
+                        }
+                    },
+                    y: {
+                        title: {
+                            text: "Junction count",
+                            display: true
+                        }
+                    }
+                }
+            }
+        });
+
+        const startflexdata = {
+            labels: %%StartFlexLabels%%,
+            datasets: [{
+                label: 'Transcript Start Mismatch Distance',
+                data: flexPoints(%%StartFlexLabels%%, %%StartFlexData%%),
+                fill: false,
+                tension: 0
+            }]
+        };
+
+        new Chart("startflexchart", {
+            type: "line",
+            data: startflexdata,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
                         title: {
                             text: "Distance from annotated junction (bp)",
                             display: true
@@ -534,7 +605,7 @@
             labels: %%EndFlexLabels%%,
             datasets: [{
                 label: 'Transcript End Mismatch Distance',
-                data: %%EndFlexData%%,
+                data: flexPoints(%%EndFlexLabels%%, %%EndFlexData%%),
                 fill: false,
                 tension: 0
             }]
@@ -555,18 +626,10 @@
                 },
                 scales: {
                     x: {
+                        type: 'linear',
                         title: {
                             text: "Distance from annotated junction (bp)",
                             display: true
-                        },
-                        ticks: {
-                            callback: function(value, index, ticks) {
-                                value = value - %%endflex%%
-                                if (value % 50 === 0) {
-                                    return value
-                                }
-                                return null
-                            }
                         }
                     },
                     y: {
@@ -619,5 +682,6 @@
         });
 
 
+%%FLEX_CONTROLS%%
 </script>
 </body>
