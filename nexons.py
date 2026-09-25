@@ -401,6 +401,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
         outbam = (options.outbase + "_" + outbam.name)
         outsam = pysam.AlignmentFile(outbam,"wb", template=samfile, threads=2)
 
+    outflex = None
+
+    if not options.noflexout:
+        outflex = Path(bam_file)
+        outflex = (options.outbase + "_" + outflex.name.replace(".bam","")+"_flexout.txt.gz")
+        outflex = gzip.open(outflex,"wt",encoding="utf8", compresslevel=4)
+        print("\t".join(["Transcript_ID","Start_Flex","End_Flex"]), file=outflex)
 
     for read in samfile.fetch(until_eof=True):
 
@@ -661,6 +668,12 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
 
 
             if found_status == "unique":
+
+                # We write out the flex values
+                if outflex is not None:
+                    print("\t".join([found_transcript_id,str(best_startflex),str(best_endflex)]), file=outflex)
+
+
                 # We increase the unique count
                 outcomes["Unique"] += 1
 
@@ -696,6 +709,10 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
             filtered_read_lengths[-1][1] += bin[1]
         else:
             filtered_read_lengths.append(bin)
+
+
+    if outflex is not None:
+        outflex.close()
 
 
     return (filtered_read_lengths,outcomes,counts,start_flex_observations,end_flex_observations, inner_flex_observations, read_coverage_percentiles)
@@ -1554,7 +1571,6 @@ def get_options():
         help="Don't allow complete matches with smaller flex to beat complete with larger flex",
     )
 
-
     parser.add_argument(
         "--no-remove-dups", action="store_true",
         help="Don't remove transcripts with identical splice patterns",
@@ -1610,6 +1626,12 @@ def get_options():
         action="store_true",
         help="Skip the production of annotated BAM files"
     )
+
+    parser.add_argument(
+        "--noflexout",
+        action="store_true",
+        help="Skip the production of observed start and end flex values"
+    )   
 
     parser.add_argument(
         "--verbose","-v",
