@@ -11,7 +11,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import ExitStack
 
-VERSION = "2026.09.02"
+VERSION = "2026.11.20"
 
 # This is the resolution of the feature indexing - we split the genome
 # into bins of this size and use these to quickly find the features we
@@ -1239,6 +1239,7 @@ def get_exons(read):
     current_pos = None
 
     for tuple_operation, tuple_length in read.cigartuples:
+
         # 0 = match
         # 1 = ins
         # 2 = del
@@ -1258,7 +1259,7 @@ def get_exons(read):
                 # so we just ignore them
                 continue
         
-        if tuple_operation == 0:
+        if tuple_operation == 0 or tuple_operation == 7 or tuple_operation == 8:
             current_pos += tuple_length
             continue
 
