@@ -155,11 +155,12 @@
 
 <div class="sectionhead"><h2>Alignment Directionality</h2></div><div class="row justify-content-center"><div class="col-md-10"><div class="my-2"><label for="strandchart-mode">Display: </label> <select id="strandchart-mode" class="form-select form-select-sm d-inline-block w-auto"><option value="counts">Counts</option><option value="percent" selected>Percentage of all reads</option></select></div><div class="chart-container" style="position:relative;height:400px"><canvas id="strandchart"></canvas></div></div></div>
 <div class="sectionhead"><h2>Read Lengths and Coverage</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="readlengthchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="transcriptcoveragechart"></canvas></div></div></div>
+<div class="sectionhead"><h2>Soft Clipping</h2></div><div class="row justify-content-center"><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="startsoftclipchart"></canvas></div></div><div class="col-md-5"><div class="chart-container" style="position:relative;height:400px"><canvas id="endsoftclipchart"></canvas></div></div></div>
 <div class="flex-section">
 <div class="sectionhead"><h2>Exon Match Flexibility</h2></div><div class="row justify-content-center"><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="innerflexchart"></canvas></div></div><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="startflexchart"></canvas></div></div><div class="col-md-4"><div class="chart-container" style="position:relative;height:400px"><canvas id="endflexchart"></canvas></div></div></div>
 </div>
 
-<p class="mt-3">Read lengths use each sample's reported bins, including its collapsed high-length tail.
+<p class="mt-3">Read lengths use each sample's reported bins, including any collapsed high-length tail.
 Legends can be clicked to hide or show samples or categories.</p>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -224,12 +225,12 @@ barChart('strandchart', [
     ['Same Strand Matches', o => o.Same_Strand_Hit],
     ['Opposing Strand Matches', o => o.Opposing_Strand_Hit]
 ]);
-function lines(id, title, xTitle, yTitle, points) {
+function lines(id, title, xTitle, yTitle, points, showSinglePoint = false) {
     new Chart(document.getElementById(id), {
         type: 'line',
         data: {datasets: samples.map((sample, i) => ({
             label: names[i], data: points(sample), borderColor: sampleColors[i],
-            backgroundColor: sampleColors[i], fill: false, tension: 0, pointRadius: 0,
+            backgroundColor: sampleColors[i], fill: false, tension: 0, pointRadius: context => showSinglePoint && context.dataset.data.length === 1 ? 3 : 0,
             pointHitRadius: 8, borderWidth: 2
         }))},
         options: {responsive: true, maintainAspectRatio: false,
@@ -243,6 +244,10 @@ lines('readlengthchart', 'Read Lengths', 'Length of read (100 bp bins)', 'Read c
       s => s.read_lengths.map(([x,y]) => ({x,y})));
 lines('transcriptcoveragechart', 'Transcript Coverage', "Percentile through transcript (5′ to 3′)", 'Read count',
       s => s.coverage.map((y,x) => ({x,y})));
+lines('startsoftclipchart', 'Start Soft Clip Length', 'Soft clip length (bp, 10 bp bins, final bin 1,000+)', 'Read count',
+      s => (s.start_soft_clip_lengths ?? []).map(([x,y]) => ({x,y})), true);
+lines('endsoftclipchart', 'End Soft Clip Length', 'Soft clip length (bp, 10 bp bins, final bin 1,000+)', 'Read count',
+      s => (s.end_soft_clip_lengths ?? []).map(([x,y]) => ({x,y})), true);
 lines('innerflexchart', 'Inner Exon Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.inner_flex));
 lines('startflexchart', 'Transcript Start Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.start_flex));
 lines('endflexchart', 'Transcript End Flex', 'Distance from annotated junction (bp)', 'Junction count', s => pairs(s.end_flex));

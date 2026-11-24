@@ -288,6 +288,28 @@
         </div>
 
 
+
+        <div class="row text-center">
+            <div class="col-md-12 sectionhead">
+                <h2>Soft Clipping</h2>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-md-4">
+                <h2>Start Soft Clip Length</h2>
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="startsoftclipchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <h2>End Soft Clip Length</h2>
+                <div style="width: 100%;" class="pt-1">
+                    <canvas id="endsoftclipchart" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+
 <div class="flex-section">
         <div class="row text-center">
             <div class="col-md-12 sectionhead">
@@ -434,45 +456,44 @@
             }
         });
 
-        const readlengthdata = {
-            labels: %%ReadLengthLabels%%,
-            datasets: [{
-                label: 'Read Lengths',
-                data: %%ReadLengthData%%,
-                fill: false,
-                tension: 0
-            }]
-        };
-
-        new Chart("readlengthchart", {
-            type: "line",
-            data: readlengthdata,
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    title: {
-                        display: false
-                    }
-                },
-                scales: {
-                    x: {
+        function lengthChart(id, label, xTitle, labels, data) {
+            new Chart(id, {
+                type: "line",
+                data: {labels, datasets: [{label, data, fill: false, tension: 0}]},
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
                         title: {
-                            text: "Length of read (nearest 100bp)",
-                            display: true
+                            display: false
                         }
                     },
-                    y: {
-                        title: {
-                            text: "Read count",
-                            display: true
+                    scales: {
+                        x: {
+                            title: {
+                                text: xTitle,
+                                display: true
+                            }
+                        },
+                        y: {
+                            title: {
+                                text: "Read count",
+                                display: true
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+
+        lengthChart("readlengthchart", "Read Lengths", "Length of read (nearest 100bp)",
+            %%ReadLengthLabels%%, %%ReadLengthData%%);
+        lengthChart("startsoftclipchart", "Start Soft Clip Length", "Soft clip length (bp, 10 bp bins, final bin 1,000+)",
+            %%StartSoftClipLengthLabels%%, %%StartSoftClipLengthData%%);
+        lengthChart("endsoftclipchart", "End Soft Clip Length", "Soft clip length (bp, 10 bp bins, final bin 1,000+)",
+            %%EndSoftClipLengthLabels%%, %%EndSoftClipLengthData%%);
 
 
         const transcriptcoveragedata = {
