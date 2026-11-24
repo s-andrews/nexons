@@ -61,15 +61,25 @@ def main():
             file_results = map(process_file_job, enumerate(options.bam))
 
         for bam_file, result in zip(options.bam, file_results):
-            read_lengths,outcomes,quantitations,startflex_observations,endflex_observations,innerflex_observations,coverage = result
+            (read_lengths, outcomes, quantitations, startflex_observations,
+             endflex_observations, innerflex_observations, coverage,
+             start_soft_clip_lengths, end_soft_clip_lengths) = result
             results.append(quantitations)
-            qc_samples.append({"file": bam_file, "outcomes": outcomes,
-                               "read_lengths": read_lengths, "start_flex": startflex_observations,
-                               "end_flex": endflex_observations,
-                               "inner_flex": innerflex_observations, "coverage": coverage})
-            write_stats_file(bam_file,outcomes, read_lengths,startflex_observations,endflex_observations, innerflex_observations, coverage, options.outbase)
+            sample = {
+                "file": bam_file,
+                "outcomes": outcomes,
+                "read_lengths": read_lengths,
+                "start_soft_clip_lengths": start_soft_clip_lengths,
+                "end_soft_clip_lengths": end_soft_clip_lengths,
+                "start_flex": startflex_observations,
+                "end_flex": endflex_observations,
+                "inner_flex": innerflex_observations,
+                "coverage": coverage,
+            }
+            qc_samples.append(sample)
+            write_stats_file(sample, options.outbase)
             if options.allqc:
-                write_qc_report(bam_file,outcomes, read_lengths,startflex_observations,endflex_observations, innerflex_observations, coverage, options, options.outbase)
+                write_qc_report(sample, options, options.outbase)
 
     write_output(genes_transcripts_exons,results,options.bam,options.outbase)
     write_combined_qc_report(qc_samples, options, options.outbase)
@@ -89,24 +99,15 @@ def process_file_job(job):
                             options.direction, options.flex, options.startflex, options.endflex)
 
 
-def write_stats_file(bam_file, outcomes, read_lengths, startflex, endflex, innerflex, coverage, outbase):
-    outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_nexons_stats.txt"
-    output = {
-        "file": bam_file,
-        "outcomes":outcomes,
-        "read_lengths": read_lengths,
-        "start_flex": startflex,
-        "end_flex": endflex,
-        "inner_flex": innerflex,
-        "coverage": coverage
-    }
-
+def write_stats_file(sample, outbase):
+    outfile = outbase+"_"+(Path(sample["file"]).name[:-4])+"_nexons_stats.txt"
     with open(outfile,"wt",encoding="utf8") as out:
-        out.write(json.dumps(output))
+        json.dump(sample, out)
 
 
 
-def write_qc_report(bam_file, outcomes, read_lengths, startflex, endflex, innerflex, coverage, options, outbase):
+def write_qc_report(sample, options, outbase):
+    bam_file = sample["file"]
     outfile = outbase+"_"+(Path(bam_file).name[:-4])+"_qc.html"
     template = Path(__file__).parent / "templates/nexons_qc_template.html"
 
@@ -130,23 +131,17 @@ def write_qc_report(bam_file, outcomes, read_lengths, startflex, endflex, innerf
     template_text = template_text.replace("%%OPTIONS%%",optionshtml)
 
 
-    for metric in outcomes:
-        value = f"{outcomes[metric]:,d}"
-        template_text = template_text.replace(f"%%{metric}%%",value)
-        template_text = template_text.replace(f"%%{metric}_Raw%%",str(outcomes[metric]))
+    for metric, count in sample["outcomes"].items():
+        template_text = template_text.replace(f"%%{metric}%%", f"{count:,d}")
+        template_text = template_text.replace(f"%%{metric}_Raw%%", str(count))
 
 
-    # We split the read lengths into separate lists for 
-    # labels and counts.
-    readlengthlabels = []
-    readlengthdata = []
-
-    for r in read_lengths:
-        readlengthlabels.append(r[0])
-        readlengthdata.append(r[1])
-    
-    template_text = template_text.replace("%%ReadLengthLabels%%",str(readlengthlabels))
-    template_text = template_text.replace("%%ReadLengthData%%",str(readlengthdata))
+    for name, key in (("ReadLength", "read_lengths"),
+                      ("StartSoftClipLength", "start_soft_clip_lengths"),
+                      ("EndSoftClipLength", "end_soft_clip_lengths")):
+        bins = sample[key]
+        template_text = template_text.replace(f"%%{name}Labels%%", str([length for length, _ in bins]))
+        template_text = template_text.replace(f"%%{name}Data%%", str([count for _, count in bins]))
 
 
     # We need the data for the transcript coverage plots.
@@ -156,10 +151,11 @@ def write_qc_report(bam_file, outcomes, read_lengths, startflex, endflex, innerf
 
     
     template_text = template_text.replace("%%TranscriptCoverageLabels%%",str(transcript_coverage_labels))
-    template_text = template_text.replace("%%TranscriptCoverageData%%",str(coverage))
+    template_text = template_text.replace("%%TranscriptCoverageData%%",str(sample["coverage"]))
 
     # Each flexibility distribution has its own range of observed distances.
-    for name, observations in (("Inner", innerflex), ("Start", startflex), ("End", endflex)):
+    for name in ("Inner", "Start", "End"):
+        observations = sample[f"{name.lower()}_flex"]
         template_text = template_text.replace(f"%%{name}FlexLabels%%", str(list(observations)))
         template_text = template_text.replace(f"%%{name}FlexData%%", str(list(observations.values())))
 
@@ -344,6 +340,31 @@ def debug (message):
         print("DEBUG:",message, file=sys.stderr)
 
 
+def record_length(histogram, length, bin_width=100):
+    length_bin = length // bin_width
+    for index in range(len(histogram), length_bin + 1):
+        histogram.append([index * bin_width, 0])
+    histogram[length_bin][1] += 1
+
+
+def collapse_length_tail(histogram):
+    """Pool the remaining counts after five consecutive empty bins."""
+    empty_bins = 0
+    for index, (_, count) in enumerate(histogram):
+        empty_bins = 0 if count else empty_bins + 1
+        if empty_bins == 5:
+            histogram[index - 1][1] += sum(count for _, count in histogram[index:])
+            return histogram[:index]
+    return histogram
+
+
+def terminal_soft_clip_length(cigar_operations):
+    for operation, length in cigar_operations:
+        if operation != pysam.CHARD_CLIP:
+            return length if operation == pysam.CSOFT_CLIP else 0
+    return 0
+
+
 def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex):
     counts = {
         "unique":{},
@@ -366,7 +387,9 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
         "Opposing_Strand_Hit": 0, # Full or partial hit where the direction of the hit and gene are opposite 
     }
 
-    read_lengths = [] # Counts for read lengths for primary alignments in 100bp bins
+    read_lengths = []
+    start_soft_clip_lengths = []
+    end_soft_clip_lengths = []
 
     read_coverage_percentiles = []
 
@@ -430,12 +453,17 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
 
         outcomes["Primary_Alignment"] += 1
 
-        length_bin = int(read.query_length / 100)
-        if len(read_lengths) < length_bin+1:
-            for bin in range(len(read_lengths),length_bin+1):
-                read_lengths.append([bin*100,0])
+        record_length(read_lengths, read.query_length)
 
-        read_lengths[length_bin][1] += 1
+        if not read.is_supplementary:
+            cigar = read.cigartuples or ()
+            start_clip = terminal_soft_clip_length(cigar)
+            end_clip = terminal_soft_clip_length(reversed(cigar))
+            # Reverse-strand CIGARs list the original read end first.
+            if read.is_reverse:
+                start_clip, end_clip = end_clip, start_clip
+            record_length(start_soft_clip_lengths, min(start_clip, 1000), bin_width=10)
+            record_length(end_soft_clip_lengths, min(end_clip, 1000), bin_width=10)
 
         if not read.reference_name in index:
             # There are no features on this chromosome
@@ -690,32 +718,13 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
                     counts["unique"][(found_gene_id,found_transcript_id)] += 1
 
 
-    # Our read lengths often have high outliers which skew the overall distribution.
-    # I'll go through the data until we've hit 5 empty slots - everything above that
-    # will be lumped together.
-    filtered_read_lengths = []
-    zero_count = 0
-    stop_adding = False
-    for bin in read_lengths:
-        if bin[1] == 0:
-            zero_count += 1
-        else:
-            zero_count = 0
-
-        if zero_count == 5:
-            stop_adding = True
-
-        if stop_adding:
-            filtered_read_lengths[-1][1] += bin[1]
-        else:
-            filtered_read_lengths.append(bin)
-
-
     if outflex is not None:
         outflex.close()
 
 
-    return (filtered_read_lengths,outcomes,counts,start_flex_observations,end_flex_observations, inner_flex_observations, read_coverage_percentiles)
+    return (collapse_length_tail(read_lengths), outcomes, counts, start_flex_observations,
+            end_flex_observations, inner_flex_observations, read_coverage_percentiles,
+            start_soft_clip_lengths, end_soft_clip_lengths)
 
 
 def gene_matches(exons,gene,flex,startflex,endflex):
