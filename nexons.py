@@ -488,7 +488,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
                     gene_direction = "R"
                 else:
                     gene_direction = "F"
-            elif direction == "opposite":
+            elif direction in ("opposing", "opposite"):
                 if read.is_reverse:
                     gene_direction = "F"
                 else:
@@ -659,7 +659,8 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
                 # Add tag for gene and trascript and partial status
                 read.set_tag("nG",found_gene_id,value_type="Z")
                 read.set_tag("nR","gene",value_type="Z")
-                outsam.write(read)
+                if outsam is not None:
+                    outsam.write(read)
 
             # We can add in the flex values to the total  
             if best_endflex is not None:          
