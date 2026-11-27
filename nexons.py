@@ -488,7 +488,7 @@ def process_bam_file(genes, index, bam_file, direction, flex, startflex, endflex
                     gene_direction = "R"
                 else:
                     gene_direction = "F"
-            elif direction in ("opposing", "opposite"):
+            elif direction =="opposing":
                 if read.is_reverse:
                     gene_direction = "F"
                 else:
