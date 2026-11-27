@@ -11,7 +11,7 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import ExitStack
 
-VERSION = "2026.11.20"
+VERSION = "2026.11.27"
 
 # This is the resolution of the feature indexing - we split the genome
 # into bins of this size and use these to quickly find the features we
